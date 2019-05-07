@@ -1,0 +1,6 @@
+export http_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+export HTTP_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+export https_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+export HTTPS_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+export no_proxy="localhost,.localdomain,.local,.svc,127.0.0.0,169.254.169.254,172.30.0.1,*.{{private_dns_domain}},*.s3.amazonaws.com"
+export NO_PROXY="localhost,.localdomain,.local,.svc,127.0.0.0,169.254.169.254,172.30.0.1,*.{{private_dns_domain}},*.s3.amazonaws.com"

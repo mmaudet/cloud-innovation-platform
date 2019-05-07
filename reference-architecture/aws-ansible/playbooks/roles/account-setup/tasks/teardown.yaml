@@ -1,0 +1,21 @@
+---
+- name: Removing DNS entries in zones
+  debug:
+    msg: '#TODO: work in progress, you need to remove it manually...'
+  with_items:
+    "{{ account_setup['dns_zones'] }}"
+
+- name: Validate code below...
+  debug:
+    msg: '#TODO: work in progress'
+  with_items:
+    "{{ account_setup['dns_zones'] }}"
+
+- name: Removing DNS zones
+  route53_zone:
+    zone: "{{ item.zone }}"
+    state: absent
+    comment: "{{ item.comment }}"
+  with_items:
+    "{{ account_setup['dns_zones'] }}"
+

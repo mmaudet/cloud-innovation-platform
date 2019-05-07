@@ -1,0 +1,18 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: no
+  become: no
+  vars_files:
+  - vars/main.yaml
+  vars:
+    vpc_subnet_azs: "{{ lookup('ec2_zones_by_region', region) }}"
+    teardown_infra: "no"
+    ocp_template: "brownfield-byo-bastion-ciap.json"
+  roles:
+  # Upload ssh-key
+  - { role: ssh-key, when: create_key == "yes" }
+  - { role: cfn-outputs, when: create_infra == "no" }
+  # Create VPC and subnets in multiple AZ
+  - pre-install-check
+  - cloudformation-infra

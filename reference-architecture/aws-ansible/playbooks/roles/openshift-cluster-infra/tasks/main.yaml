@@ -1,0 +1,4 @@
+---
+- name: Running '{{ task }}' on infrastructure
+  include_tasks: "{{ task }}.yaml"
+

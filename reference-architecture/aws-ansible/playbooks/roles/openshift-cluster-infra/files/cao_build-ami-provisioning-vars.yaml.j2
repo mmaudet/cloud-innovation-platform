@@ -1,0 +1,29 @@
+openshift_aws_build_ami_ssh_user: {% if ocp_vars['openshift_deployment_type'] == 'openshift-enterprise' %}ec2-user{% else %}centos{% endif %}
+
+openshift_deployment_type: {{ocp_vars['openshift_deployment_type']}}
+openshift_aws_clusterid: {{stack_name}}-{{cluster_id}}
+openshift_aws_region: {{region}}
+openshift_aws_create_vpc: false
+# should it be {{stack_name}}-{{cluster_id}}-VPC-Project
+openshift_aws_vpc_name: {{stack_name}}-net-VPC-Project
+openshift_aws_subnet_az: {{region}}a
+openshift_aws_create_security_groups: false
+openshift_aws_ssh_key_name: {{keypair}}
+openshift_aws_base_ami: {{ocp_vars['ami_id']}}
+openshift_aws_create_s3: False
+openshift_aws_build_ami_group: {{ tmpsgocp['group_name'] }}
+openshift_aws_vpc:
+  name: "{{ stack_name }}-{{cluster_id}}-VPC-Project"
+  cidr: {{ vpc['project']['cidr'] }}
+  subnets:
+    {{region}}:
+    - cidr: {{ vpc['project']['subnets']['pub1']['cidr'] }}
+      az: "{{region}}a"
+container_runtime_docker_storage_type: overlay2
+container_runtime_docker_storage_setup_device: /dev/xvdb
+
+{% if ocp_vars['openshift_deployment_type'] == 'openshift-enterprise' %}
+rhsub_user: {{ocp_vars['rhsm_user']}} 
+rhsub_pass: {{ocp_vars['rhsm_password']}}
+rhsub_pool: {{ocp_vars['rhsm_openshift_pool_id']}}
+{% endif %}

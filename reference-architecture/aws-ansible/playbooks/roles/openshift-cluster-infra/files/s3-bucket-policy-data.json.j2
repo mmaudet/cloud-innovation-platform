@@ -1,0 +1,38 @@
+{
+   "Version": "2012-10-17",
+   "Statement": [
+     {
+       "Sid": "Allow-access-by-humans",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": "s3:*",
+       "Resource": [
+                     "arn:aws:s3:::{{ stack_name + '-ocp-' + cluster_id | lower + '-data' }}",
+                     "arn:aws:s3:::{{ stack_name + '-ocp-' + cluster_id | lower + '-data' }}/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": [
+		   "{{ root_account['iam_user_id'] }}",
+		   "{{ root_account['account_id'] }}"
+               ]
+         }
+       }
+     },
+     {
+       "Sid": "Allow-access-from-installer-role",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": "s3:*",
+       "Resource": [
+                     "arn:aws:s3:::{{ stack_name + '-ocp-' + cluster_id | lower + '-data' }}",
+                     "arn:aws:s3:::{{ stack_name + '-ocp-' + cluster_id | lower + '-data' }}/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": "{{ installer_role_id }}:*"
+         }
+       }
+     }
+   ]
+}

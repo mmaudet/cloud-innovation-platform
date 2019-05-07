@@ -1,0 +1,1072 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template creates the various network functions of the core infrastructure
+  It contains definitions for network functions:
+    WAF: CIAP - Hosting - Web Application Firewall instances
+    NAT: CIAP - Browsing - Web Browsing NAT instances
+    VPN: CIAP - VPN Concentrators - remote ssh/rdp access to Admin VPC
+
+  **WARNING** This template creates AWS resources. You will be billed for the AWS
+  resources used if you create a stack from this template. QS(0027)
+
+Parameters:
+  KeyPairName:
+    Description: Public/private key pairs allow you to securely connect to your NAT
+      instance after it launches. This is used only if the region does not support
+      NAT gateways.
+    Type: AWS::EC2::KeyPair::KeyName
+  PublicDNSDomain:
+    Description: Public DNS Domain
+    Type: String
+  PrivateDNSDomain:
+    Description: Private DNS Domain
+    Type: String
+  WAFInstanceType:
+    AllowedValues:
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    - t3.xlarge
+    - t3.2xlarge
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - t2.xlarge
+    - t2.2xlarge
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
+    - m5.12xlarge
+    - m5.24xlarge
+    - m5d.large
+    - m5d.xlarge
+    - m5d.2xlarge
+    - m5d.4xlarge
+    - m5d.12xlarge
+    - m5d.24xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - m4.16xlarge
+    Default: t2.small
+    Description: Amazon EC2 instance type for the WAF instances.
+    Type: String
+  NATInstanceType:
+    AllowedValues:
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    - t3.xlarge
+    - t3.2xlarge
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - t2.xlarge
+    - t2.2xlarge
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
+    - m5.12xlarge
+    - m5.24xlarge
+    - m5d.large
+    - m5d.xlarge
+    - m5d.2xlarge
+    - m5d.4xlarge
+    - m5d.12xlarge
+    - m5d.24xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - m4.16xlarge
+    Default: t2.small
+    Description: Amazon EC2 instance type for the NAT instances.
+    Type: String
+  VPNInstanceType:
+    AllowedValues:
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    - t3.xlarge
+    - t3.2xlarge
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - t2.xlarge
+    - t2.2xlarge
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
+    - m5.12xlarge
+    - m5.24xlarge
+    - m5d.large
+    - m5d.xlarge
+    - m5d.2xlarge
+    - m5d.4xlarge
+    - m5d.12xlarge
+    - m5d.24xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - m4.16xlarge
+    Default: t2.small
+    Description: Amazon EC2 instance type for the VPN instances.
+    Type: String
+  BastionInstanceType:
+    AllowedValues:
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    - t3.xlarge
+    - t3.2xlarge
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - t2.xlarge
+    - t2.2xlarge
+    - m5.large
+    - m5.xlarge
+    - m5.2xlarge
+    - m5.4xlarge
+    - m5.12xlarge
+    - m5.24xlarge
+    - m5d.large
+    - m5d.xlarge
+    - m5d.2xlarge
+    - m5d.4xlarge
+    - m5d.12xlarge
+    - m5d.24xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - m4.16xlarge
+    Default: t2.small
+    Description: Amazon EC2 instance type for the Bastion instances.
+    Type: String
+  WAFSecGrpID:
+    Description: WAF instances Security Group
+    Type: String
+  NATSecGrpID:
+    Description: NAT instances Security Group
+    Type: String
+  WAFELBSecGrpID:
+    Description: WAF ELB Security Group
+    Type: String
+  NATELBSecGrpID:
+    Description: NAT ELB Security Group
+    Type: String
+  VPNSecGrpID:
+    Description: VPN instances Security Group
+    Type: String
+  VPNELBSecGrpID:
+    Description: VPN ELB Security Group
+    Type: String
+  BastionSecGrpID:
+    Description: Bastion instances Security Group
+    Type: String
+  BastionELBSecGrpID:
+    Description: Bastion ELB Security Group
+    Type: String
+  WAFEC2InstanceProfile:
+    Description: Instance Profile for WAF Instances
+    Type: String
+  NATEC2InstanceProfile:
+    Description: Instance Profile for NAT Instances
+    Type: String
+  VPNEC2InstanceProfile:
+    Description: Instance Profile for VPN Instances
+    Type: String
+  BastionEC2InstanceProfile:
+    Description: Instance Profile for Bastion Instances
+    Type: String
+  WAFCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for WAF Instances
+    Type: String
+  NATCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for NAT Instances
+    Type: String
+  VPNCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for VPN Instances
+    Type: String
+  BastionCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for Bastion Instances
+    Type: String
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+  CiapHostingSubNet{{ idx }}ID:
+    Description: CIAP Hosting subnet ID
+    Type: String
+  CiapBrowsingSubNet{{ idx }}ID:
+    Description: CIAP Browsing subnet ID
+    Type: String
+  CiapVPNSubNet{{ idx }}ID:
+    Description: CIAP VPN subnet ID
+    Type: String
+{% endfor %}
+{% for idx in range(1, admin_nb_subnets|int + 1) %}
+  AdminSubNet{{ idx }}ID:
+    Description: Admin subnet ID
+    Type: String
+{% endfor %}
+  WAFUserData:
+    Description: WAF instances user data
+    Type: String
+  NATUserData:
+    Description: NAT instances user data
+    Type: String
+  VPNUserData:
+    Description: VPN instances user data
+    Type: String
+  BastionUserData:
+    Description: Bastion instances user data
+    Type: String
+  WAFRootVolSize:
+    Description: WAF instances root volume size
+    Default: '10'
+    Type: String
+  WAFRootVolType:
+    Description: WAF instances root volume type
+    Default: 'gp2'
+    Type: String
+  NATRootVolSize:
+    Description: NAT instances root volume size
+    Default: '10'
+    Type: String
+  NATRootVolType:
+    Description: NAT instances root volume type
+    Default: 'gp2'
+    Type: String
+  VPNRootVolSize:
+    Description: VPN instances root volume size
+    Default: '10'
+    Type: String
+  VPNRootVolType:
+    Description: VPN instances root volume type
+    Default: 'gp2'
+    Type: String
+  BastionRootVolSize:
+    Description: Bastion instances root volume size
+    Default: '10'
+    Type: String
+  BastionRootVolType:
+    Description: Bastion instances root volume type
+    Default: 'gp2'
+    Type: String
+  NumberOfAZs:
+    AllowedValues:
+    - '2'
+    - '3'
+    - '4'
+    Default: '2'
+    Description: Number of Availability Zones to use in the VPC. This must match your
+      selections in the list of Availability Zones parameter.
+    Type: String
+  DeployWAFResources:
+    Default: true
+    Description: Deploy WAF resources or not
+    Type: String
+  DeployNATResources:
+    Default: true
+    Description: Deploy NAT resources or not
+    Type: String
+  DeployVPNResources:
+    Default: true
+    Description: Deploy VPN resources or not
+    Type: String
+  BastionPort:
+    Default: 22
+    Description: Network port the Bastion Instances will be listening to
+    Type: String
+  SquidPort:
+    Default: 3128
+    Description: Network port the Squid Instances will be listening to
+    Type: String
+  SquidPortInt80:
+    Default: 3129
+    Description: Network port the Squid Instances will be listening to in transparent mode for HTTP traffic
+    Type: String
+  SquidPortInt443:
+    Default: 3130
+    Description: Network port the Squid Instances will be listening to in transparent mode for HTTPS traffic
+    Type: String
+  SquidDist:
+    Default: zip
+    Description: Squid distribution to use from 'zip' or 'os'
+    Type: String
+  VPNPort:
+    Default: 22
+    Description: Network port the VPN Instances will be listening to
+    Type: String
+  VPCCiapID:
+    Description: VPC Ciap ID
+    Type: String
+  S3BucketPrefix:
+    Description: S3 Bucket Prefix
+    Type: String
+  S3Location:
+    Default: {{ stack_name }}-data
+    Type: String
+    Description: Enter the S3 Bucket name used to store data in the form of
+      bucket-name/prefix [or bucket-name in the case of root folder]
+  S3LogsLocation:
+    Default: {{ stack_name }}-logs
+    Type: String
+    Description: Enter the S3 Bucket name used to store logs in the form of
+      bucket-name/prefix [or bucket-name in the case of root folder]
+  SquidProxyProtocol:
+    Type: String
+    Description: Does the Squid version supports Proxy Protocol. Requires Squid
+      version >3.5
+    AllowedValues: [true, false]
+    Default: true
+
+
+
+
+Mappings:
+  AWSAMIRegionMap:
+    eu-west-1:
+      AWSWAFHVM: {{ netfunc_vars['AWSWAFHVM'] }}
+      AWSNATHVM: {{ netfunc_vars['AWSNATHVM'] }}
+      AWSVPNHVM: {{ netfunc_vars['AWSVPNHVM'] }}
+      AWSBastionHVM: {{ netfunc_vars['AWSBastionHVM'] }}
+
+
+Conditions:
+  1AZCondition: !Or [!Equals [!Ref NumberOfAZs, 1], {Condition: 2AZCondition}]
+  2AZCondition: !Or [!Equals [!Ref NumberOfAZs, 2], {Condition: 3AZCondition}]
+  3AZCondition: !Or [!Equals [!Ref NumberOfAZs, 3], {Condition: 4AZCondition}]
+  4AZCondition: !Equals [!Ref NumberOfAZs, 4]
+  WAFInstanceCondition: !Equals [!Ref DeployWAFResources, true]
+  NATInstanceCondition: !Equals [!Ref DeployNATResources, true]
+  VPNInstanceCondition: !Equals [!Ref DeployVPNResources, true]
+  BastionInstanceCondition: !Equals [!Ref DeployVPNResources, true]
+  WAFInstance&1AZCondition: !And [{Condition: WAFInstanceCondition}, {Condition: 1AZCondition}]
+  WAFInstance&2AZCondition: !And [{Condition: WAFInstanceCondition}, {Condition: 2AZCondition}]
+  WAFInstance&3AZCondition: !And [{Condition: WAFInstanceCondition}, {Condition: 3AZCondition}]
+  WAFInstance&4AZCondition: !And [{Condition: WAFInstanceCondition}, {Condition: 4AZCondition}]
+  NATInstance&1AZCondition: !And [{Condition: NATInstanceCondition}, {Condition: 1AZCondition}]
+  NATInstance&2AZCondition: !And [{Condition: NATInstanceCondition}, {Condition: 2AZCondition}]
+  NATInstance&3AZCondition: !And [{Condition: NATInstanceCondition}, {Condition: 3AZCondition}]
+  NATInstance&4AZCondition: !And [{Condition: NATInstanceCondition}, {Condition: 4AZCondition}]
+  VPNInstance&1AZCondition: !And [{Condition: VPNInstanceCondition}, {Condition: 1AZCondition}]
+  VPNInstance&2AZCondition: !And [{Condition: VPNInstanceCondition}, {Condition: 2AZCondition}]
+  VPNInstance&3AZCondition: !And [{Condition: VPNInstanceCondition}, {Condition: 3AZCondition}]
+  VPNInstance&4AZCondition: !And [{Condition: VPNInstanceCondition}, {Condition: 4AZCondition}]
+  BastionInstance&1AZCondition: !And [{Condition: BastionInstanceCondition}, {Condition: 1AZCondition}]
+  BastionInstance&2AZCondition: !And [{Condition: BastionInstanceCondition}, {Condition: 2AZCondition}]
+  BastionInstance&3AZCondition: !And [{Condition: BastionInstanceCondition}, {Condition: 3AZCondition}]
+  BastionInstance&4AZCondition: !And [{Condition: BastionInstanceCondition}, {Condition: 4AZCondition}]
+  NVirginiaRegionCondition: !Equals [!Ref 'AWS::Region', us-east-1]
+  SupportProxyProtocol: !Equals [!Ref 'SquidProxyProtocol', true]
+  S3VPCEndpointCondition: !Not [!Or [
+        !Equals [!Ref 'AWS::Region', us-gov-west-1], !Equals [!Ref 'AWS::Region',
+          cn-north-1]]]
+
+
+
+Resources:
+  ### VPC CIAP
+
+  ### BEGIN Reverse Proxy / WAF
+  WAFAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref 'WAFAutoScalingLaunchConfiguration'
+      LoadBalancerNames:
+      - !Ref 'WAFElasticLoadBalancer'
+      DesiredCapacity: '1'
+      MinSize: '1'
+      MaxSize: '10'
+      VPCZoneIdentifier:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'CiapHostingSubNet{{ idx }}ID'
+{% endfor %}
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: '300'
+      Tags:
+      - PropagateAtLaunch: true
+        Key: "Name"
+        Value: "WAF Instance"
+      - PropagateAtLaunch: true
+        Key: "Function"
+        Value: "WAF"
+
+
+  WAFAutoScalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile: !Ref WAFEC2InstanceProfile
+      AssociatePublicIpAddress: true
+      InstanceType: !Ref WAFInstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+      - !Ref WAFSecGrpID
+      ImageId: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', 'AWSWAFHVM']
+      InstanceMonitoring: false
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "MY-CLOUD-INIT-SCRIPT: Start"
+          export NETFUNC=waf
+          export http_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export HTTP_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export https_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export HTTPS_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export no_proxy="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+          export NO_PROXY="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+
+          # Waiting for NAT instance to become operational
+          CMD='curl -sL -w "%{http_code}" "https://s3.eu-west-1.amazonaws.com/" -o /dev/null --retry 5 --max-time 3'
+          while [ "$(eval $CMD)" != "200" ]; do
+            echo "MY-CLOUD-INIT-SCRIPT: NAT instance(s) not ready, sleeping 5 seconds"
+            sleep 5
+          done
+          cd /root
+
+          # Common bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching common bootstrap script"
+          aws s3 cp s3://${S3Location}/bootstrap/common/bootstrap.sh ./
+          chmod +x ./bootstrap.sh
+          echo "MY-CLOUD-INIT-SCRIPT: Launching common bootstrap script"
+          ./bootstrap.sh ${AWS::StackName} ${WAFCloudWatchLogsGroup} ${S3Location} 2>&1 | tee /var/log/oil-bootstrap
+
+          # Function-specific bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching '$NETFUNC-specific' bootstrap script & launching it"
+          NFSCRIPT="bootstrap-${!NETFUNC}.sh"
+          #aws s3 cp s3://${S3Location}/bootstrap/$NETFUNC/$NFSCRIPT ./
+          #chmod +x ./$NFSCRIPT
+          #./$NFSCRIPT ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location } 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
+
+          aws s3 cp --recursive s3://${S3Location}/bootstrap/waf/etc/ /etc/
+          docker run -d  \
+                  -v /etc/nginx/conf.d:/etc/nginx/conf.d \
+                  -v /etc/letsencrypt:/etc/letsencrypt \
+                  -p 80:80 \
+                  -p 443:443 \
+                  nginx:latest
+
+          echo "MY-CLOUD-INIT-SCRIPT: Done!"
+
+  WAFElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      SecurityGroups:
+      - !Ref WAFELBSecGrpID
+      Subnets:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'CiapHostingSubNet{{ idx }}ID'
+{% endfor %}
+      Listeners:
+      - LoadBalancerPort: 80
+        InstancePort: 80
+        Protocol: TCP
+      - LoadBalancerPort: 443
+        InstancePort: 443
+        Protocol: TCP
+      ConnectionDrainingPolicy:
+        Enabled: 'true'
+        Timeout: '60'
+      Scheme: internet-facing
+      HealthCheck:
+        HealthyThreshold: '6'
+        Interval: '10'
+        Target: !Join [':', [TCP, '80']]
+        Timeout: '5'
+        UnhealthyThreshold: '2'
+      CrossZone: 'true'
+      #Policies: #TODO: Check if policy need update / tuning
+      #- !If [SupportProxyProtocol, {PolicyName: EnableProxyProtocol, PolicyType: ProxyProtocolPolicyType,
+      #    Attributes: [{Name: ProxyProtocol, Value: 'true'}], InstancePorts: [ "80", "443" ]},
+      #  !Ref 'AWS::NoValue']
+      AccessLoggingPolicy:
+        S3BucketName:
+          Ref: S3LogsLocation
+        S3BucketPrefix: ''
+        Enabled: 'true'
+        EmitInterval: '5'
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-WAFELB']]
+
+  WAFScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'WAFAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '1'
+
+  WAFScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'WAFAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '-1'
+
+  WAFAlarmScaleOutPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale out if average WAF traffic > 5000 KB/s for 5 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '5000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+      - !Ref 'WAFScaleOutPolicy'
+
+  WAFAlarmScaleInPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale in if average WAF traffic < 2000 KB/s for 15 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '3'
+      Threshold: '2000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+      - !Ref 'WAFScaleInPolicy'
+  ### END Reverse Proxy / WAF
+
+  ### BEGIN NAT instance / Squid proxy
+  NATAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref 'NATAutoScalingLaunchConfiguration'
+      LoadBalancerNames:
+      - !Ref 'NATElasticLoadBalancer'
+      DesiredCapacity: '1'
+      MinSize: '1'
+      MaxSize: '10'
+      VPCZoneIdentifier:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'CiapBrowsingSubNet{{ idx }}ID'
+{% endfor %}
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: '300'
+      Tags:
+      - PropagateAtLaunch: true
+        Key: "Name"
+        Value: "NAT Instance"
+      - PropagateAtLaunch: true
+        Key: "Function"
+        Value: "NAT"
+
+  NATAutoScalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile: !Ref NATEC2InstanceProfile
+      AssociatePublicIpAddress: true
+      InstanceType: !Ref NATInstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+      - !Ref NATSecGrpID
+      ImageId: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', 'AWSNATHVM']
+      InstanceMonitoring: false
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "MY-CLOUD-INIT-SCRIPT: Start"
+          export NETFUNC=nat
+
+          # Make sure we have internet access
+          CMD='curl -sL -w "%{http_code}" "https://s3.eu-west-1.amazonaws.com/" -o /dev/null --retry 5 --max-time 3'
+          while [ "$(eval $CMD)" != "200" ]; do
+            # No proxy defined here as NAT instances ARE the proxies...
+            #echo "MY-CLOUD-INIT-SCRIPT: NAT instance(s) not ready, sleeping 5 seconds"
+            echo "MY-CLOUD-INIT-SCRIPT: Unable to access test endpoint, sleeping 5 seconds"
+            sleep 5
+          done
+
+          cd /root
+
+          # Common bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching common bootstrap script"
+          aws s3 cp s3://${S3Location}/bootstrap/common/bootstrap.sh ./
+          chmod +x ./bootstrap.sh
+          echo "MY-CLOUD-INIT-SCRIPT: Launching common bootstrap script"
+          ./bootstrap.sh ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location} 2>&1 | tee /var/log/oil-bootstrap
+
+          # Function-specific bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching '$NETFUNC-specific' bootstrap script & launching it"
+          NFSCRIPT="bootstrap-${!NETFUNC}.sh"
+          aws s3 cp s3://${S3Location}/bootstrap/$NETFUNC/$NFSCRIPT ./
+          chmod +x ./$NFSCRIPT
+          ./$NFSCRIPT ${SquidDist} ${SquidPort} ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location } 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
+          echo "MY-CLOUD-INIT-SCRIPT: Done!"
+
+  NATElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      SecurityGroups:
+      - !Ref NATELBSecGrpID
+      Subnets:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'CiapBrowsingSubNet{{ idx }}ID'
+{% endfor %}
+      Listeners:
+      - LoadBalancerPort: !Ref 'SquidPort'
+        InstancePort: !Ref 'SquidPort'
+        Protocol: TCP
+      - LoadBalancerPort: !Ref 'SquidPortInt80'
+        InstancePort: !Ref 'SquidPortInt80'
+        Protocol: TCP
+      - LoadBalancerPort: !Ref 'SquidPortInt443'
+        InstancePort: !Ref 'SquidPortInt443'
+        Protocol: TCP
+      - LoadBalancerPort: 22
+        InstancePort: 22
+        Protocol: TCP
+      ConnectionDrainingPolicy:
+        Enabled: 'true'
+        Timeout: '60'
+      Scheme: internal
+      HealthCheck:
+        HealthyThreshold: '6'
+        Interval: '10'
+        Target: !Join [':', [TCP, !Ref 'SquidPort']]
+        Timeout: '5'
+        UnhealthyThreshold: '4'
+      CrossZone: 'true'
+      Policies:
+      #TODO: check if change needed for transparent proxy
+      - !If [SupportProxyProtocol, {PolicyName: EnableProxyProtocol, PolicyType: ProxyProtocolPolicyType,
+          Attributes: [{Name: ProxyProtocol, Value: 'true'}], InstancePorts: [!Ref 'SquidPort']},
+        !Ref 'AWS::NoValue']
+      AccessLoggingPolicy:
+        S3BucketName:
+          Ref: S3LogsLocation
+        S3BucketPrefix: ''
+        Enabled: 'true'
+        EmitInterval: '5'
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-NATELB']]
+
+  NATScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'NATAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '1'
+
+  NATScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'NATAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '-1'
+
+  NATAlarmScaleOutPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale out if average Squid traffic > 5000 KB/s for 5 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '5000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+      - !Ref 'NATScaleOutPolicy'
+
+  NATAlarmScaleInPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale in if average Squid traffic < 2000 KB/s for 15 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '3'
+      Threshold: '2000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+      - !Ref 'NATScaleInPolicy'
+  ### END NAT instance / Squid proxy
+
+  ### BEGIN VPN Concentrator
+  VPNAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref 'VPNAutoScalingLaunchConfiguration'
+      LoadBalancerNames:
+      - !Ref 'VPNElasticLoadBalancer'
+      DesiredCapacity: '1'
+      MinSize: '1'
+      MaxSize: '10'
+      VPCZoneIdentifier:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'CiapVPNSubNet{{ idx }}ID'
+{% endfor %}
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: '300'
+      Tags:
+      - PropagateAtLaunch: true
+        Key: "Name"
+        Value: "VPN Instance"
+      - PropagateAtLaunch: true
+        Key: "Function"
+        Value: "VPN"
+
+  VPNAutoScalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile: !Ref VPNEC2InstanceProfile
+      AssociatePublicIpAddress: true
+      InstanceType: !Ref VPNInstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+      - !Ref VPNSecGrpID
+      ImageId: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', 'AWSVPNHVM']
+      InstanceMonitoring: false
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "MY-CLOUD-INIT-SCRIPT: Start"
+          export NETFUNC=vpn
+          export http_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export HTTP_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export https_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export HTTPS_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export no_proxy="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+          export NO_PROXY="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+
+          # Waiting for NAT instance to become operational
+          CMD='curl -sL -w "%{http_code}" "https://s3.eu-west-1.amazonaws.com/" -o /dev/null --retry 5 --max-time 3'
+          while [ "$(eval $CMD)" != "200" ]; do
+            echo "MY-CLOUD-INIT-SCRIPT: NAT instance(s) not ready, sleeping 5 seconds"
+            sleep 5
+          done
+          cd /root
+
+          # Common bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching common bootstrap script"
+          aws s3 cp s3://${S3Location}/bootstrap/common/bootstrap.sh ./
+          chmod +x ./bootstrap.sh
+          echo "MY-CLOUD-INIT-SCRIPT: Launching common bootstrap script"
+          ./bootstrap.sh ${AWS::StackName} ${VPNCloudWatchLogsGroup} ${S3Location} 2>&1 | tee /var/log/oil-bootstrap
+          #docker run -dit -p 80:80 -p 443:443 httpd:alpine
+          echo "MY-CLOUD-INIT-SCRIPT: Done!"
+
+  VPNElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      SecurityGroups:
+      - !Ref VPNELBSecGrpID
+      Subnets:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'CiapVPNSubNet{{ idx }}ID'
+{% endfor %}
+      Listeners:
+      - LoadBalancerPort: 22
+        InstancePort: !Ref 'VPNPort'
+        Protocol: TCP
+      ConnectionDrainingPolicy:
+        Enabled: 'true'
+        Timeout: '60'
+      Scheme: internet-facing
+      HealthCheck:
+        HealthyThreshold: '6'
+        Interval: '10'
+        Target: !Join [':', [TCP, !Ref 'VPNPort']]
+        Timeout: '5'
+        UnhealthyThreshold: '2'
+      CrossZone: 'true'
+      #Policies: #TODO: Check if policy need update / tuning
+      #- !If [SupportProxyProtocol, {PolicyName: EnableProxyProtocol, PolicyType: ProxyProtocolPolicyType,
+      #    Attributes: [{Name: ProxyProtocol, Value: 'true'}], InstancePorts: [!Ref 'VPNPort']},
+      #  !Ref 'AWS::NoValue']
+      AccessLoggingPolicy:
+        S3BucketName:
+          Ref: S3LogsLocation
+        S3BucketPrefix: ''
+        Enabled: 'true'
+        EmitInterval: '5'
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-VPNELB']]
+
+  VPNScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'VPNAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '1'
+
+  VPNScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'VPNAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '-1'
+
+  VPNAlarmScaleOutPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale out if average VPN traffic > 12000 KB/s for 5 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '12000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+      - !Ref 'VPNScaleOutPolicy'
+
+  VPNAlarmScaleInPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale in if average VPN traffic < 2000 KB/s for 15 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '3'
+      Threshold: '2000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+      - !Ref 'VPNScaleInPolicy'
+  ### END VPN Concentrator
+
+  ### BEGIN Admin Bastion
+  BastionAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref 'BastionAutoScalingLaunchConfiguration'
+      LoadBalancerNames:
+      - !Ref 'BastionElasticLoadBalancer'
+      DesiredCapacity: '1'
+      MinSize: '1'
+      MaxSize: '2'
+      VPCZoneIdentifier:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'AdminSubNet{{ idx }}ID'
+{% endfor %}
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: '300'
+      Tags:
+      - PropagateAtLaunch: true
+        Key: "Name"
+        Value: "Bastion Instance"
+      - PropagateAtLaunch: true
+        Key: "Function"
+        Value: "Bastion"
+
+  BastionAutoScalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile: !Ref BastionEC2InstanceProfile
+      AssociatePublicIpAddress: false
+      InstanceType: !Ref BastionInstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+      - !Ref BastionSecGrpID
+      ImageId: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', 'AWSBastionHVM']
+      InstanceMonitoring: false
+      UserData: #TODO: Configure proxy to 'webproxy.dns'
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "MY-CLOUD-INIT-SCRIPT: Start"
+          export NETFUNC=bastion
+          export http_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export HTTP_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export https_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export HTTPS_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+          export no_proxy="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+          export NO_PROXY="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+
+          # Waiting for NAT instance to become operational
+          CMD='curl -sL -w "%{http_code}" "https://s3.eu-west-1.amazonaws.com/" -o /dev/null --retry 5 --max-time 3'
+          while [ "$(eval $CMD)" != "200" ]; do
+            echo "MY-CLOUD-INIT-SCRIPT: NAT instance(s) not ready, sleeping 5 seconds"
+            sleep 5
+          done
+          cd /root
+
+          # Common bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching common bootstrap script"
+          aws s3 cp s3://${S3Location}/bootstrap/common/bootstrap.sh ./
+          chmod +x ./bootstrap.sh
+          echo "MY-CLOUD-INIT-SCRIPT: Launching common bootstrap script"
+          ./bootstrap.sh ${AWS::StackName} ${BastionCloudWatchLogsGroup} ${S3Location} 2>&1 | tee /var/log/oil-bootstrap
+          #docker run -dit -p 80:80 -p 443:443 httpd:alpine
+          echo "MY-CLOUD-INIT-SCRIPT: Done!"
+
+  BastionElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      SecurityGroups:
+      - !Ref BastionELBSecGrpID
+      Subnets:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - !Ref 'AdminSubNet{{ idx }}ID'
+{% endfor %}
+      Listeners:
+      - LoadBalancerPort: !Ref BastionPort
+        InstancePort: !Ref BastionPort
+        Protocol: TCP
+      ConnectionDrainingPolicy:
+        Enabled: 'true'
+        Timeout: '60'
+      Scheme: internal
+      HealthCheck:
+        HealthyThreshold: '6'
+        Interval: '10'
+        Target: !Join [':', [TCP, !Ref BastionPort]]
+        Timeout: '5'
+        UnhealthyThreshold: '2'
+      CrossZone: 'true'
+      #Policies: #TODO: Check if policy need update / tuning
+      #- !If [SupportProxyProtocol, {PolicyName: EnableProxyProtocol, PolicyType: ProxyProtocolPolicyType,
+      #    Attributes: [{Name: ProxyProtocol, Value: 'true'}], InstancePorts: [!Ref 'BastionPort']},
+      #  !Ref 'AWS::NoValue']
+      AccessLoggingPolicy:
+        S3BucketName:
+          Ref: S3LogsLocation
+        S3BucketPrefix: ''
+        Enabled: 'true'
+        EmitInterval: '5'
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-BastionELB']]
+
+  BastionScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'BastionAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '1'
+
+  BastionScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'BastionAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '-1'
+
+  BastionAlarmScaleOutPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale out if average Bastion traffic > 12000 KB/s for 5 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: Tech
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '12000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+      - !Ref 'BastionScaleOutPolicy'
+
+  BastionAlarmScaleInPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale in if average Bastion traffic < 2000 KB/s for 15 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: Tech
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '3'
+      Threshold: '2000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+      - !Ref 'BastionScaleInPolicy'
+  ### END Bastion Concentrator
+
+  ### VPC Tech
+
+  ### VPC Project
+
+Outputs:
+  BastionELBName:
+    Description: Name of Bastion instance ELB
+    Value: !Ref 'BastionElasticLoadBalancer'
+  BastionDNSName:
+    Description: DNS Name of Bastion instance ELB
+    Value: !GetAtt [BastionElasticLoadBalancer, DNSName]
+  WAFELBName:
+    Description: Name of WAF proxy ELB
+    Value: !Ref 'WAFElasticLoadBalancer'
+  WAFDNSName:
+    Description: DNS Name of WAF proxy ELB
+    Value: !GetAtt [WAFElasticLoadBalancer, DNSName]
+  SquidELBName:
+    Description: Name of Squid proxy ELB
+    Value: !Ref 'NATElasticLoadBalancer'
+  SquidURL:
+    Description: URL of Squid proxy ELB
+    Value: !Join ['', ['http://', !GetAtt [NATElasticLoadBalancer, DNSName], ':', !Ref 'SquidPort']]
+  SquidDNSName:
+    Description: DNS Name of Squid proxy ELB
+    Value: !GetAtt [NATElasticLoadBalancer, DNSName]
+  VPNELBName:
+    Description: Name of VPN Concentrator ELB
+    Value: !Ref 'VPNElasticLoadBalancer'
+  VPNDNSName:
+    Description: DNS Name of VPN Concentrator ELB
+    Value: !GetAtt [VPNElasticLoadBalancer, DNSName]
+

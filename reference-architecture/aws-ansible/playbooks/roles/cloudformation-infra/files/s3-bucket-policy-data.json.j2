@@ -1,0 +1,117 @@
+{
+   "Version": "2012-10-17",
+   "Statement": [
+     {
+       "Sid": "Allow-access-by-humans",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": "s3:*",
+       "Resource": [
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": [
+		   "{{ root_account['iam_user_id'] }}",
+		   "{{ root_account['account_id'] }}"
+               ]
+         }
+       }
+     },
+     {
+       "Sid": "Allow-access-from-installer-role",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": "s3:*",
+       "Resource": [
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": "{{ installer_role_id }}:*"
+         }
+       }
+     },
+     {
+       "Sid": "Allow-access-from-WAF-instances",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": [
+                   "s3:Get*",
+                   "s3:List*"
+                 ],
+       "Resource": [
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/waf/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": "{{ roleid_WAFEC2Role['iam_roles'][0]['role_id'] }}:*"
+         }
+       }
+     },
+     {
+       "Sid": "Allow-access-from-NAT-instances",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": [
+                   "s3:Get*",
+                   "s3:List*"
+                 ],
+       "Resource": [
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/nat/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": "{{ roleid_NATEC2Role['iam_roles'][0]['role_id'] }}:*"
+         }
+       }
+     },
+     {
+       "Sid": "Allow-access-from-VPN-instances",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": [
+                   "s3:Get*",
+                   "s3:List*"
+                 ],
+       "Resource": [
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/vpn/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": "{{ roleid_VPNEC2Role['iam_roles'][0]['role_id'] }}:*"
+         }
+       }
+     },
+     {
+       "Sid": "Allow-access-from-Bastion-instances",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": [
+                   "s3:Get*",
+                   "s3:List*"
+                 ],
+       "Resource": [
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": "{{ roleid_BastionEC2Role['iam_roles'][0]['role_id'] }}:*"
+         }
+       }
+     }
+   ]
+}

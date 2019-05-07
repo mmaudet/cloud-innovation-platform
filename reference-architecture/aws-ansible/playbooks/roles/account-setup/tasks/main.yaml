@@ -1,0 +1,4 @@
+---
+- name: Running '{{ task }}' on Account Setup
+  include_tasks: "{{ task }}.yaml"
+

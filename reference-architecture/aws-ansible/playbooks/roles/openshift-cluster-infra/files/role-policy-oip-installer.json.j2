@@ -1,0 +1,46 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+          "s3:*"
+        ],
+      "Resource": [
+                    "arn:aws:s3:::{{ stack_name + '-ocp-' + cluster_id  | lower + '-data' }}",
+                    "arn:aws:s3:::{{ stack_name + '-ocp-' + cluster_id  | lower + '-data' }}/*"
+                  ],
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+          "route53:AssociateVPCWithHostedZone",
+          "route53:Change*",
+          "route53:Create*",
+          "route53:Get*",
+          "route53:List*"
+        ],
+      "Resource": [
+          "*"
+        ]
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+          "cloudformation:*",
+          "cloudwatch:*",
+          "logs:*",
+          "ec2:*",
+          "lambda:*",
+          "iam:*",
+          "sts:*",
+          "elasticloadbalancing:*",
+          "autoscaling:*",
+          "application-autoscaling:*",
+          "dynamodb:*",
+          "elasticfilesystem:*"
+        ],
+      "Resource": "*"
+    }
+  ]
+}

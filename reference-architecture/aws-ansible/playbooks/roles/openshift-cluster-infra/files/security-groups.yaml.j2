@@ -1,0 +1,445 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: >
+  This template creates infrastructure security groups. Isolating them
+  in a separate template simplifies CI/CD pipeline implementation when responsibility
+  is spread across different teams.
+
+Parameters:
+  DeployWAFResources:
+    Default: true
+    Description: Deploy WAF resources or not
+    Type: String
+  DeployNATResources:
+    Default: true
+    Description: Deploy NAT resources or not
+    Type: String
+  DeployVPNResources:
+    Default: true
+    Description: Deploy VPN resources or not
+    Type: String
+  VPCCiapID:
+    Description: ID of CIAP VPC
+    Type: String
+  VPCCiapCIDR:
+    Description: CIDR block for the CIAP VPC
+    Type: String
+  VPCAdminID:
+    Description: ID of CIAP VPC
+    Type: String
+  VPCAdminCIDR:
+    Description: CIDR block for the Admin VPC
+    Type: String
+  VPCTechID:
+    Description: ID of CIAP VPC
+    Type: String
+  VPCTechCIDR:
+    Description: CIDR block for the Admin VPC
+    Type: String
+  VPCProjectID:
+    Description: ID of CIAP VPC
+    Type: String
+  VPCProjectCIDR:
+    Description: CIDR block for the Project VPC
+    Type: String
+  SquidPort:
+    Default: 3128
+    Description: Network port the Squid Instances will be listening to
+    Type: String
+  SquidPortInt80:
+    Default: 3129
+    Description: Network port the Squid Instances will be listening to in transparent mode for HTTP traffic
+    Type: String
+  SquidPortInt443:
+    Default: 3130
+    Description: Network port the Squid Instances will be listening to in transparent mode for HTTPS traffic
+    Type: String
+
+Conditions:
+  WAFInstanceCondition: !Equals [!Ref DeployWAFResources, true]
+  NATInstanceCondition: !Equals [!Ref DeployNATResources, true]
+  VPNInstanceCondition: !Equals [!Ref DeployVPNResources, true]
+  BastionInstanceCondition: !Equals [!Ref DeployVPNResources, true]
+
+Resources:
+  ### VPC CIAP
+  WAFInstanceSecurityGroup:
+    Condition: WAFInstanceCondition
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enables HTTP/HTTPS access to WAF instances
+      VpcId: !Ref VPCCiapID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref WAFELBSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        SourceSecurityGroupId: !Ref WAFELBSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+      #SecurityGroupEgress:
+      ##TODO: Open additional ports for apps deployed in Project
+      #- IpProtocol: tcp
+      #  FromPort: 80
+      #  ToPort: 80
+      #  CidrIp: !Ref VPCProjectCIDR
+      #- IpProtocol: tcp
+      #  FromPort: 443
+      #  ToPort: 443
+      #  CidrIp: !Ref VPCProjectCIDR
+      #- IpProtocol: tcp
+      #  FromPort: !Ref SquidPort
+      #  ToPort: !Ref SquidPort
+      #  SourceSecurityGroupId: !Ref NATELBSecurityGroup
+      #- IpProtocol: tcp
+      #  FromPort: !Ref SquidPortInt80
+      #  ToPort: !Ref SquidPortInt80
+      #  SourceSecurityGroupId: !Ref NATELBSecurityGroup
+      #- IpProtocol: tcp
+      #  FromPort: !Ref SquidPortInt443
+      #  ToPort: !Ref SquidPortInt443
+      #  SourceSecurityGroupId: !Ref NATELBSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-WAFInstance']]
+
+  WAFELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Reverse proxy / WAF farm - ELB security group
+      VpcId: !Ref VPCCiapID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPort
+        ToPort: !Ref SquidPort
+        DestinationSecurityGroupId: !Ref 'NATELBSecurityGroup'
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt80
+        ToPort: !Ref SquidPortInt80
+        DestinationSecurityGroupId: !Ref 'NATELBSecurityGroup'
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt443
+        ToPort: !Ref SquidPortInt443
+        DestinationSecurityGroupId: !Ref 'NATELBSecurityGroup'
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-WAF-ELB']]
+
+  WAFELBSecurityGroupEgress80:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref 'WAFELBSecurityGroup'
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      DestinationSecurityGroupId: !Ref 'WAFInstanceSecurityGroup'
+
+  WAFELBSecurityGroupEgress443:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref 'WAFELBSecurityGroup'
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationSecurityGroupId: !Ref 'WAFInstanceSecurityGroup'
+
+  NATInstanceSecurityGroup:
+    Condition: NATInstanceCondition
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enables outbound internet access for the VPC via the NAT instances
+      VpcId: !Ref VPCCiapID
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: '-1'
+        IpProtocol: '-1'
+        ToPort: '-1'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: !Ref VPCCiapCIDR
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref VPCCiapCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPort'
+        ToPort: !Ref 'SquidPort'
+        CidrIp: !Ref VPCCiapCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt80'
+        ToPort: !Ref 'SquidPortInt80'
+        CidrIp: !Ref VPCCiapCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt443'
+        ToPort: !Ref 'SquidPortInt443'
+        CidrIp: !Ref VPCCiapCIDR
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: !Ref VPCAdminCIDR
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref VPCAdminCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPort'
+        ToPort: !Ref 'SquidPort'
+        CidrIp: !Ref VPCAdminCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt80'
+        ToPort: !Ref 'SquidPortInt80'
+        CidrIp: !Ref VPCAdminCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt443'
+        ToPort: !Ref 'SquidPortInt443'
+        CidrIp: !Ref VPCAdminCIDR
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: !Ref VPCTechCIDR
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref VPCTechCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPort'
+        ToPort: !Ref 'SquidPort'
+        CidrIp: !Ref VPCTechCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt80'
+        ToPort: !Ref 'SquidPortInt80'
+        CidrIp: !Ref VPCTechCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt443'
+        ToPort: !Ref 'SquidPortInt443'
+        CidrIp: !Ref VPCTechCIDR
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPort'
+        ToPort: !Ref 'SquidPort'
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt80'
+        ToPort: !Ref 'SquidPortInt80'
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt443'
+        ToPort: !Ref 'SquidPortInt443'
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-NATInstance']]
+
+  NATELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Squid proxy farm - ELB security group
+      VpcId: !Ref VPCCiapID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPort'
+        ToPort: !Ref 'SquidPort'
+        CidrIp: 10.0.0.0/8 #TODO: try to confine if relevent
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt80'
+        ToPort: !Ref 'SquidPortInt80'
+        CidrIp: 10.0.0.0/8 #TODO: try to confine if relevent
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPortInt443'
+        ToPort: !Ref 'SquidPortInt443'
+        CidrIp: 10.0.0.0/8 #TODO: try to confine if relevent
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-NAT-ELB']]
+
+  #TODO: check if needed for port SquidPortInt80 and SquidPortInt443
+  NATELBSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      DestinationSecurityGroupId: !Ref 'NATInstanceSecurityGroup'
+      FromPort: !Ref 'SquidPort'
+      GroupId: !Ref 'NATELBSecurityGroup'
+      IpProtocol: tcp
+      ToPort: !Ref 'SquidPort'
+
+  VPNInstanceSecurityGroup:
+    Condition: VPNInstanceCondition
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enables SSH access to VPN instances
+      VpcId: !Ref VPCCiapID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref VPNELBSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        DestinationSecurityGroupId: !Ref 'BastionELBSecurityGroup'
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPort
+        ToPort: !Ref SquidPort
+        DestinationSecurityGroupId: !Ref 'NATELBSecurityGroup'
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt80
+        ToPort: !Ref SquidPortInt80
+        DestinationSecurityGroupId: !Ref 'NATELBSecurityGroup'
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt443
+        ToPort: !Ref SquidPortInt443
+        DestinationSecurityGroupId: !Ref 'NATELBSecurityGroup'
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-VPNInstance']]
+
+  VPNELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: VPN Concentrator farm - ELB security group
+      VpcId: !Ref VPCCiapID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-VPN-ELB']]
+
+  VPNELBSecurityGroupEgress22:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref 'VPNELBSecurityGroup'
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      DestinationSecurityGroupId: !Ref 'VPNInstanceSecurityGroup'
+
+  VPNELBSecurityGroupIngress22:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref 'VPNELBSecurityGroup'
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+
+  ### VPC Admin
+  BastionInstanceSecurityGroup:
+    Condition: BastionInstanceCondition
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enables SSH access to Bastion instances
+      VpcId: !Ref VPCAdminID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionELBSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: !Ref VPCAdminCIDR
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'Admin-BastionInstance']]
+
+  BastionELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Bastion farm - ELB security group
+      VpcId: !Ref VPCAdminID
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'Admin-Bastion-ELB']]
+
+  ### VPC Project
+
+
+Outputs:
+  WAFInstanceSecurityGroupID:
+    Value: !Ref WAFInstanceSecurityGroup
+    Description: WAF Instance Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-WAFInstanceSecurityGroupID
+  NATInstanceSecurityGroupID:
+    Value: !Ref NATInstanceSecurityGroup
+    Description: NAT Instance Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-NATInstanceSecurityGroupID
+  WAFELBSecurityGroupID:
+    Value: !Ref WAFELBSecurityGroup
+    Description: WAF ELB Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-WAFELBSecurityGroupID
+  NATELBSecurityGroupID:
+    Value: !Ref NATELBSecurityGroup
+    Description: NAT ELB Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-NATELBSecurityGroupID
+  VPNInstanceSecurityGroupID:
+    Value: !Ref VPNInstanceSecurityGroup
+    Description: VPN Instance Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNInstanceSecurityGroupID
+  VPNELBSecurityGroupID:
+    Value: !Ref VPNELBSecurityGroup
+    Description: VPN ELB Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNELBSecurityGroupID
+  BastionInstanceSecurityGroupID:
+    Value: !Ref BastionInstanceSecurityGroup
+    Description: Bastion Instance Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionInstanceSecurityGroupID
+  BastionELBSecurityGroupID:
+    Value: !Ref BastionELBSecurityGroup
+    Description: Bastion ELB Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionELBSecurityGroupID

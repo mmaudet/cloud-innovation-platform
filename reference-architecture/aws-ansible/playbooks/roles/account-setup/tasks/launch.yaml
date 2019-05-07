@@ -1,0 +1,10 @@
+---
+- name: Creating DNS zones
+  route53_zone:
+    zone: "{{ item.zone }}"
+    state: present
+    comment: "{{ item.comment }}"
+  with_items:
+    "{{ dnsconfig['dns_zones'] }}"
+  register: dns_zones
+

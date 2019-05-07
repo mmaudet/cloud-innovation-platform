@@ -1,0 +1,23 @@
+#!/bin/env bash
+# Description: this script should be run to setup prerequisites for autoscale
+#   image creation.
+##############################################################################
+
+# adapted from https://blog.openshift.com/how-to-use-gpus-with-deviceplugin-in-openshift-3-10/
+yum -y update
+reboot
+
+yum -y install kernel-devel-`uname -r`
+yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+yum -y install https://developer.download.nvidia.com/compute/cuda/repos/rhel7/x86_64/cuda-repo-rhel7-10.0.130-1.x86_64.rpm
+yum -y install nvidia-driver nvidia-driver-devel nvidia-driver-cuda nvidia-modprobe
+
+modprobe -r nouveau
+nvidia-modprobe && nvidia-modprobe -u
+
+echo "Querying GPU"
+nvidia-smi --query-gpu=gpu_name --format=csv,noheader --id=0 | sed -e 's/ /-/g'
+
+# Step 2
+curl -so /etc/yum.repos.d/nvidia-container-runtime.repo https://nvidia.github.io/nvidia-container-runtime/centos7/nvidia-container-runtime.repo
+yum -y install nvidia-container-runtime-hook podman

@@ -1,0 +1,266 @@
+#!/bin/env bash
+
+# Logging function
+_log() {
+  echo @*
+}
+
+
+
+# Create Launch Configuration
+_log "Creating AWS Launch Configuration"
+aws autoscaling create-launch-configuration \
+    --launch-configuration-name {{stack_name}}-ocp-{{cluster_id}}-project-cao-Node-LC \
+    --region {{region}} \
+    --image-id {{ocp_vars['ami_id']}} \
+    --instance-type {{ocp_vars['appnode_instance_type']}} \
+    --security-groups {{ tmpsgocp['group_id'] }} \
+    --user-data file:///opt/oip/cao_user_data.txt \
+    --key-name {{ keypair }}
+
+
+
+# Create Autoscaling group
+_log "Creating AWS Autoscaling Group"
+aws autoscaling create-auto-scaling-group \
+      --auto-scaling-group-name {{stack_name}}-ocp-{{cluster_id}}-project-cao-Node-ASG \
+      --region {{region}} \
+      --launch-configuration-name {{stack_name}}-ocp-{{cluster_id}}-project-cao-Node-LC \
+      --min-size {{ ocp_vars['cluster_autoscaling_min_size'] }} \
+      --max-size {{ ocp_vars['cluster_autoscaling_max_size'] }} \
+      --vpc-zone-identifier {{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }} \
+      --tags ResourceId={{stack_name}}-ocp-{{cluster_id}}-project-cao-Node-ASG,ResourceType=auto-scaling-group,Key=Name,Value={{stack_name}}-ocp-{{cluster_id}}-compute-ASG-node,PropagateAtLaunch=true ResourceId={{stack_name}}-ocp-{{cluster_id}}-project-cao-Node-ASG,ResourceType=auto-scaling-group,Key=kubernetes.io/cluster/{{stack_name}}-ocp-{{cluster_id}},Value=owned,PropagateAtLaunch=true ResourceId={{stack_name}}-ocp-{{cluster_id}}-project-cao-Node-ASG,ResourceType=auto-scaling-group,Key=k8s.io/cluster-autoscaler/node-template/label/node-role.kubernetes.io/compute,Value=true,PropagateAtLaunch=true
+
+
+
+# Create a namespace for the auto-scaler:
+_log "Creating OpenShift namespace for cluster auto-scaler"
+oc apply -f - <<EOF
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: cluster-autoscaler
+  annotations:
+    openshift.io/node-selector: ""
+EOF
+
+
+
+# Create a service account for the auto-scaler:
+_log "Creating OpenShift service account for cluster auto-scaler"
+oc apply -f - <<EOF
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    k8s-addon: cluster-autoscaler.addons.k8s.io
+    k8s-app: cluster-autoscaler
+  name: cluster-autoscaler
+  namespace: cluster-autoscaler
+EOF
+
+
+
+# Create a cluster role to grant the required permissions to the service account:
+_log "Creating OpenShift cluster role for cluster auto-scaler"
+oc apply -n cluster-autoscaler -f - <<EOF
+apiVersion: v1
+kind: ClusterRole
+metadata:
+  name: cluster-autoscaler
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  - persistentvolumes
+  - pods
+  - replicationcontrollers
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+  attributeRestrictions: null
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - get
+  - list
+  - watch
+  - patch
+  - create
+  attributeRestrictions: null
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+  - patch
+  - update
+  attributeRestrictions: null
+- apiGroups:
+  - extensions
+  - apps
+  resources:
+  - daemonsets
+  - replicasets
+  - statefulsets
+  verbs:
+  - get
+  - list
+  - watch
+  attributeRestrictions: null
+- apiGroups:
+  - policy
+  resources:
+  - poddisruptionbudgets
+  verbs:
+  - get
+  - list
+  - watch
+  attributeRestrictions: null
+EOF
+
+
+
+# Create a role for the deployment auto-scaler:
+_log "Creating OpenShift role for deployment cluster auto-scaler"
+oc apply -n cluster-autoscaler -f - <<EOF
+apiVersion: v1
+kind: Role
+metadata:
+  name: cluster-autoscaler
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  resourceNames:
+  - cluster-autoscaler
+  - cluster-autoscaler-status
+  verbs:
+  - create
+  - get
+  - patch
+  - update
+  attributeRestrictions: null
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  attributeRestrictions: null
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  attributeRestrictions: null
+EOF
+
+
+
+# Create a creds file to store AWS credentials for the auto-scaler:
+_log "Creating OpenShift AWS credentials file for cluster auto-scaler"
+cat <<EOF > creds
+[default]
+aws_access_key_id = {{ lookup('env','AWS_ACCESS_KEY_ID') }}
+aws_secret_access_key = {{ lookup('env','AWS_SECRET_ACCESS_KEY') }}
+EOF
+
+
+
+# Create the a secret that contains the AWS credentials:
+_log "Creating OpenShift secret for cluster auto-scaler"
+oc create secret -n cluster-autoscaler generic autoscaler-credentials --from-file=creds
+
+
+
+# Create and grant cluster-reader role to the cluster-autoscaler service account that you created:
+_log "Granting OpenShift cluster-role and role to cluster auto-scaler"
+oc adm policy add-cluster-role-to-user cluster-autoscaler system:serviceaccount:cluster-autoscaler:cluster-autoscaler -n cluster-autoscaler
+oc adm policy add-role-to-user cluster-autoscaler system:serviceaccount:cluster-autoscaler:cluster-autoscaler --role-namespace cluster-autoscaler -n cluster-autoscaler
+oc adm policy add-cluster-role-to-user cluster-reader system:serviceaccount:cluster-autoscaler:cluster-autoscaler -n cluster-autoscaler
+
+
+
+# Deploy the cluster auto-scaler:
+_log "Deploying OpenShift cluster auto-scaler"
+oc apply -n cluster-autoscaler -f - <<EOF
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: cluster-autoscaler
+  name: cluster-autoscaler
+  namespace: cluster-autoscaler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cluster-autoscaler
+      role: infra
+  template:
+    metadata:
+      labels:
+        app: cluster-autoscaler
+        role: infra
+    spec:
+      containers:
+      - args:
+        - /bin/cluster-autoscaler
+        - --alsologtostderr
+        - --v=4
+        - --skip-nodes-with-local-storage=False
+        - --leader-elect-resource-lock=configmaps
+        - --namespace=cluster-autoscaler
+        - --cloud-provider=aws
+        - --nodes={{ ocp_vars['cluster_autoscaling_min_size'] }}:s{{ ocp_vars['cluster_autoscaling_max_size'] }}6:{{stack_name}}-ocp-{{cluster_id}}-project-cao-Node-ASG
+        env:
+        - name: AWS_REGION
+          value: {{region}}
+        - name: AWS_SHARED_CREDENTIALS_FILE
+          value: /var/run/secrets/aws-creds/creds
+{% if ocp_vars['http_proxy_hostname'] %}
+        - name: HTTP_PROXY
+          value: http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/
+        - name: HTTPS_PROXY
+          value: http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/
+        - name: NO_PROXY
+          value: localhost,127.0.0.1,169.254.169.254,172.30.0.1,.{{private_dns_domain}}
+        - name: http_proxy
+          value: http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/
+        - name: https_proxy
+          value: http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/
+        - name: no_proxy
+          value: localhost,127.0.0.1,169.254.169.254,172.30.0.1,.{{private_dns_domain}}
+{% endif %}
+{% if ocp_vars['openshift_deployment_type'] == 'openshift-enterprise' %}
+        image: registry.redhat.io/openshift3/ose-cluster-autoscaler:{{ocp_vars['openshift_image_tag']}}
+{% else %}
+        image: docker.io/openshift/origin-cluster-autoscaler:{{ocp_vars['openshift_release']}}
+{% endif %}
+        name: autoscaler
+        volumeMounts:
+        - mountPath: /var/run/secrets/aws-creds
+          name: aws-creds
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        node-role.kubernetes.io/infra: "true"
+      serviceAccountName: cluster-autoscaler
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: aws-creds
+        secret:
+          defaultMode: 420
+          secretName: autoscaler-credentials
+EOF

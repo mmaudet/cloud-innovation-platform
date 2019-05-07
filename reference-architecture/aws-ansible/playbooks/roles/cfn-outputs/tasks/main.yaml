@@ -1,0 +1,71 @@
+---
+- name: Obtaining facts about AWS CloudFormation OIP Stack Net
+  set_fact:
+    tmpstackname: "{{ stack_name }}-net"
+
+- cloudformation_facts:
+    stack_name: "{{ tmpstackname }}"
+  register: tmpstackcf
+
+- set_fact:
+    cfnet: "{{ tmpstackcf.ansible_facts.cloudformation[tmpstackname] }}"
+
+
+
+- name: Obtaining facts about AWS CloudFormation OIP Stack RLP
+  set_fact:
+    tmpstackname: "{{ stack_name }}-rlp"
+
+- cloudformation_facts:
+    stack_name: "{{ tmpstackname }}"
+  register: tmpstackcf
+
+- set_fact:
+    cfrlp: "{{ tmpstackcf.ansible_facts.cloudformation[tmpstackname] }}"
+
+
+
+- name: Obtaining facts about AWS CloudFormation OIP Stack SecGrp
+  set_fact:
+    tmpstackname: "{{ stack_name }}-secgrp"
+
+- cloudformation_facts:
+    stack_name: "{{ tmpstackname }}"
+  register: tmpstackcf
+
+- set_fact:
+    cfsecgrp: "{{ tmpstackcf.ansible_facts.cloudformation[tmpstackname] }}"
+
+
+
+- name: Obtaining facts about AWS CloudFormation OIP Stack NetFunc
+  set_fact:
+    tmpstackname: "{{ stack_name }}-netfunc"
+
+- cloudformation_facts:
+    stack_name: "{{ tmpstackname }}"
+  register: tmpstackcf
+
+- set_fact:
+    cfnetfunc: "{{ tmpstackcf.ansible_facts.cloudformation[tmpstackname] }}"
+
+
+
+- name: Obtaining facts about AWS CloudFormation OIP Stack ProjectInf
+  set_fact:
+    tmpstackname: "{{ stack_name }}-project-ocp-inf"
+
+- cloudformation_facts:
+    stack_name: "{{ tmpstackname }}"
+  register: tmpstackcf
+
+- set_fact:
+    cfprojectocp: "{{ tmpstackcf.ansible_facts.cloudformation[tmpstackname] }}"
+
+
+
+# - name: Set s3 facts
+#   set_fact:
+#     s3user_id: "{{ stack['ansible_facts']['cloudformation'][stack_name]['stack_outputs']['S3UserAccessId'] }}"
+#     s3user_secret: "{{ stack['ansible_facts']['cloudformation'][stack_name]['stack_outputs']['S3UserSecretKey'] }}"
+#     s3_bucket_name: "{{ stack['ansible_facts']['cloudformation'][stack_name]['stack_outputs']['S3Bucket'] }}"

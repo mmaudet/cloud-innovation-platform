@@ -1,0 +1,3 @@
+playbooks/roles/cloudformation-infra/files/rendered/*
+*.pyc
+*/*.pyc

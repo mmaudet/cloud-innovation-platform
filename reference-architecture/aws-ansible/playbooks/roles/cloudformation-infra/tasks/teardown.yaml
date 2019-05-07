@@ -1,0 +1,75 @@
+---
+- name: Tearing down OCP bastion/installer
+  cloudformation:
+    stack_name: "{{ stack_name }}-project-ocp"
+    state: "absent"
+    region: "{{ region }}"
+
+- name: Tearing down Project OCP
+  cloudformation:
+    stack_name: "{{ stack_name }}-project-ocp"
+    state: "absent"
+    region: "{{ region }}"
+
+- name: Tearing down Network Functions
+  cloudformation:
+    stack_name: "{{ stack_name }}-netfunc"
+    state: "absent"
+    region: "{{ region }}"
+
+- name: Deleting DNS entries for Network Functions
+  route53:
+    command: delete
+    profile: "{{ aws_cli_installer_profile }}"
+    zone: "{{ item.zone }}"
+    private_zone: "{{ item.private_zone }}"
+    type: "{{ item.type }}"
+    record: "{{ item.record }}"
+    value: "{{ item.value }}"
+    ttl: 60
+    overwrite: yes
+    wait: yes
+  with_items:
+    - zone: "{{ public_dns_domain }}"
+      private_zone: false
+      type: CNAME
+      record: "www.{{ public_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['WAFDNSName'] }}"
+      wait: no
+    - zone: "{{ public_dns_domain }}"
+      private_zone: false
+      type: CNAME
+      record: "vpn.{{ public_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['VPNDNSName'] }}"
+      wait: no
+    - zone: "{{ private_dns_domain }}"
+      private_zone: true
+      type: CNAME
+      record: "bastion.{{ private_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['BastionDNSName'] }}"
+      wait: yes
+    - zone: "{{ private_dns_domain }}"
+      private_zone: true
+      type: CNAME
+      record: "webproxy.{{ private_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['SquidDNSName'] }}"
+      wait: yes
+
+- name: Tearing down Security Groups
+  cloudformation:
+    stack_name: "{{ stack_name }}-secgrp"
+    state: "absent"
+    region: "{{ region }}"
+
+- name: Tearing down Roles, Instance Profiles and CloudWatch-Logs
+  cloudformation:
+    stack_name: "{{ stack_name }}-rlp"
+    state: "absent"
+    region: "{{ region }}"
+
+- name: Tearing down Network Infrastructure
+  cloudformation:
+    stack_name: "{{ stack_name }}-net"
+    state: "absent"
+    region: "{{ region }}"
+

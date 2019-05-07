@@ -1,0 +1,41 @@
+#!/bin/bash
+#
+# Arguments
+# $1: Squid distribution to install: os or zip
+# $2: Squid port number
+# $3: CloudFormation stack name
+# $4: CloudWatch Logs log group
+# $5: S3 Bucket containing squid package
+#
+
+
+
+stackname="$1"
+loggroup="$3"
+s3loc="$2"
+
+
+
+if [ -z "$stackname" ] || [ -z "$loggroup" ] || [ -z "$s3loc" ]; then
+        echo "Missing arguments"
+        exit 1
+fi
+
+
+
+# fetch files
+aws s3 cp --recursive s3://${s3loc}/bootstrap/waf/etc/ /etc/
+
+docker pull nginx:latest
+
+docker run -d  \
+	-v /etc/nginx/conf.d:/etc/nginx/conf.d \
+	-v /etc/letsencrypt:/etc/letsencrypt \
+	-p 80:80 \
+	-p 443:443 \
+	nginx:latest
+
+#TODO: configure various things
+# - docker login
+# - aws logs
+#./squid-setup.sh ${stackname} ${loggroup} 2>&1 | tee script.log

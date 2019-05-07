@@ -1,0 +1,202 @@
+#!/bin/bash
+#
+# Arguments
+# $1: CloudFormation stack name
+# $2: CloudWatch Logs log group
+# $3: S3 Bucket location
+# 
+
+stackname="$1"
+loggroup="$2"
+S3Location="$3"
+
+
+
+if [ -z "$stackname" ] || [ -z "$loggroup" ]; then
+	echo "Missing arguments"
+	exit 1
+fi
+
+
+
+mylog() {
+  echo "BOOTSTRAP-Common: $*"
+}
+
+
+
+# Fetching instance specific data
+region=`curl -s 169.254.169.254/latest/meta-data/placement/availability-zone`
+region=${region::-1}
+
+
+
+# Configuring web proxy
+mylog "Configuring Web Proxy"
+WEBPROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+WEBPROXYEXCL="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+cat <<EOT > /etc/environment
+# Web Proxy
+export http_proxy=$WEBPROXY
+export HTTP_PROXY=$WEBPROXY
+export https_proxy=$WEBPROXY
+export HTTPS_PROXY=$WEBPROXY
+export no_proxy=$WEBPROXYEXCL
+export NO_PROXY=$WEBPROXYEXCL
+EOT
+
+
+
+# Installing latest patchs
+mylog "Patching to latest release"
+yum update -y
+
+
+
+# Configuring hostname and DNS
+mylog "Configuring hostname"
+case $NETFUNC in
+	"waf")
+		HNPREF=waf;;
+	"nat")
+		HNPREF=nat;;
+	"vpn")
+		HNPREF=vpn;;
+	"bastion")
+		HNPREF=bastion;;
+	*)
+		mylog ERROR: $NETFUNC function unknown
+		HNPREF=unknown;;
+esac
+mylog "-> Found $HNPREF"
+mylog "-> Setting /etc/sysconfig/network file"
+sed -i -s "s/^\(HOSTNAME=\).*$/\1$HNPREF.{{private_dns_domain}}/" /etc/sysconfig/network
+mylog "-> Setting current hostname"
+hostname $HNPREF.{{private_dns_domain}}
+
+
+
+# Configure SSHD keep-alive
+mylog "Tuning SSHD configuration"
+cat <<EOT >> /etc/ssh/sshd_config
+
+# Required because network functions are deployed behind AWS ELB
+# and those ELB cut the connection after 60 secondes.
+ClientAliveInterval 55
+ClientAliveCountMax 0
+EOT
+service sshd start
+
+
+
+# Installing git
+mylog "Installing git"
+yum -y install git
+
+
+
+# Installing Docker Engine
+mylog "Installing Docker Engine"
+yum -y install docker
+
+
+
+# Installing Docker Compose
+mylog "Installing Docker Compose"
+curl -L "https://github.com/docker/compose/releases/download/1.23.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/bin/docker-compose
+chmod +x /usr/bin/docker-compose
+
+
+
+# Install and configure CloudWatch Logs agent
+mylog "Installing & configuring CloudWatch Logs Agent"
+yum install -y awslogs
+cp /etc/awslogs/awscli.conf /etc/awslogs/awscli.conf.default
+cp /etc/awslogs/awslogs.conf /etc/awslogs/awslogs.conf.default
+cat /etc/awslogs/awscli.conf.default | sed "s/^region = .*/region = $region/" > /etc/awslogs/awscli.conf
+
+cat > /etc/awslogs/awslogs.conf << EOF
+[general]
+state_file = /var/lib/awslogs/agent-state
+use_gzip_http_content_encoding=true
+[var-log-messages]
+log_group_name = $loggroup
+log_stream_name = var-log-messages-{instance_id}
+file = /var/log/messages*
+[cloud-init]
+log_group_name = $loggroup
+log_stream_name = cloud-init-{instance_id}
+file = /var/log/cloud-init.log*
+[cloud-init-output]
+log_group_name = $loggroup
+log_stream_name = cloud-init-output-{instance_id}
+file = /var/log/cloud-init-output.log*
+[cron]
+log_group_name = $loggroup
+log_stream_name = cron-{instance_id}
+file = /var/log/cron*
+[secure]
+log_group_name = $loggroup
+log_stream_name = secure-{instance_id}
+file = /var/log/secure*
+[yum]
+log_group_name = $loggroup
+log_stream_name = yum-{instance_id}
+file = /var/log/yum.log*
+[docker]
+log_group_name = $loggroup
+log_stream_name = docker-{instance_id}
+file = /var/log/docker*
+EOF
+
+
+
+# Adding default cron job
+# WARNING: Not idempotent if other tasks change crontab after this script...
+mylog "Setting crontab to automatically install security updates every hour"
+#crontab -l > mycron
+cat > mycron << EOF
+0 0 * * * yum -y update --security
+EOF
+crontab mycron
+rm mycron
+
+
+
+mylog "Configuring proxy in various tools"
+if [ "x$NETFUNC" != "nat" ]; then
+  AWSLOGPROXYCFG=/etc/awslogs/proxy.conf
+  if [ ! -f $AWSLOGPROXYCFG ]; then
+    echo "ERROR! A proxy is required to access CloudWatch Logs endpoint"
+    echo "and configuration file $AWSLOGPROXYCFG file not found!"
+    echo "Logs will not be pushed to CloudWatch Logs service."
+  fi
+  mylog "-> found AWS CloudWatch Logs Agent, tuning it..."
+  sed -i "s|^\(HTTP_PROXY=\)|\1$WEBPROXY|" $AWSLOGPROXYCFG
+  sed -i "s|^\(HTTPS_PROXY=\)|\1$WEBPROXY|" $AWSLOGPROXYCFG
+  sed -i "s|^\(NO_PROXY=\)|\1$WEBPROXYEXCL|" $AWSLOGPROXYCFG
+fi
+if [ -f /etc/sysconfig/docker ]; then
+  mylog "-> found Docker Engine, tuning it..."
+  echo >> /etc/sysconfig/docker
+  cat /etc/environment >> /etc/sysconfig/docker
+  service docker restart
+fi
+
+
+
+# Launch services
+mylog "Launching AWS CloudWatch Logs Agent"
+chkconfig awslogs on
+service awslogs start
+
+
+
+# Adding OIP PS ssh pub keys
+mkdir -p /tmp/pubkeys
+aws s3 cp --recursive s3://${S3Location}/bootstrap/common/pubkeys /tmp/pubkeys
+for key in /tmp/pubkeys/*.pub; do
+  echo "Authorizing pub key '$key'"
+  cat $key >> /home/ec2-user/.ssh/authorized_keys
+done
+rm -rf /tmp/pubkeys

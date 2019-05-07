@@ -1,0 +1,115 @@
+---
+# Global variales
+task: launch
+create_key: "no"
+create_infra: "no"
+
+# VPC
+vpc:
+  ciap:
+    cidr: 10.0.0.0/20
+  project:
+    cidr: 10.0.128.0/17
+    subnets:
+      pub1:
+        name: name
+        cidr: 10.0.128.0/24
+      pub2:
+        name: name
+        cidr: 10.0.129.0/24
+      pub3:
+        name: name
+        cidr: 10.0.130.0/24
+      priv1:
+        name: name
+        cidr: 10.0.132.0/24
+      priv2:
+        name: name
+        cidr: 10.0.133.0/24
+      priv3:
+        name: name
+        cidr: 10.0.134.0/24
+
+
+# AWS specific configuration
+region: eu-west-1
+s3_bucket_prefix: "{{stack_name}}"
+
+## Specific to VPC CIAP
+nginx_instance_type: t3.small
+squid_instance_type: t3.small
+squid_port: 3128
+vpn_instance_type: t3.small
+
+## Specific to VPC Admin
+bastion_instance_type: t3.small
+
+## Global variables
+aws_cli_installer_profile: oip-installer
+
+# Account-setup role
+root_account:
+  setup: 'yes'
+  account_id: 012345678901
+  coe_account_id: 012345678901
+  iam_user: username
+  iam_user_id: AIDAABCDEFGHIJKLMNOPQ
+
+# Network Functions
+netfunc_vars:
+  AWSWAFHVM: ami-0123456789abcdefg
+  AWSNATHVM: ami-0123456789abcdefg
+  AWSVPNHVM: ami-0123456789abcdefg
+  AWSBastionHVM: ami-0123456789abcdefg
+
+# DNS Configuration
+dnsconfig:
+  setup_dns: 'yes'
+  dns_zones:
+    # Create public zones here using Ansible and not CloudFormation because:
+    # - Public zones may need to be shared between stacks
+    # - Public zones may need to persist after a stack is deleted
+    # Private zones should be created within CloudFormation templates
+    - zone: "{{ public_dns_domain }}"
+      comment: "Open Innovation Platform's Public Base DNS Zone for stack {{ stack_name }}"
+
+# Red Hat Openshift Container Platform
+ocp_vars:
+  openshift_deployment_type: 'openshift-enterprise'
+  openshift_release: "v3.11"
+  openshift_pkg_version: "-3.11.82"
+  openshift_image_tag: "v3.11.82"
+  glusterfs_image_tag: "v3.11.1"
+  rhsm_user: "changeme"
+  rhsm_password: "changeme"
+  #rhsm_openshift_pool_id: "8a85f99b68b9397301691e3651b85e8a"
+  rhsm_openshift_pool_id: "8a85f9845dd99310015dda04e51f483e"
+  http_proxy_hostname: "webproxy.{{private_dns_domain}}"
+  http_proxy_port: "{{squid_port}}"
+  http_no_proxy: "localhost,.localdomain,.local,127.0.0.1,169.254.169.254,.internal,.svc,.priv,.elb.amazonaws.com,172.30.0.1,.{{ private_dns_domain }}"
+  gh_organization: "changeme"
+  gh_client_id: "0123456789abcdefghij"
+  gh_secret: "0123456789abcdefghijklmnopqrstuvwxyz0123"
+  dns_domain: "{{cluster_id}}.{{ public_dns_domain }}"
+  console_port: "443"
+  wildcard_zone: "apps.{{cluster_id}}.{{ public_dns_domain }}"
+  keypair: "{{ keypair }}"
+  # Centos
+  #ami_id: "ami-3548444c"
+  # RHEL-7.6_HVM_GA-20181017-x86_64-0-Hourly2-GP2
+  ami_id: "ami-0e12cbde3e77cbb98" 
+  admin_instance_type: "t3.large"
+  master_instance_type: "t3.xlarge"
+  master_instance_count: "1"
+  infra_instance_type: "t3.xlarge"
+  infra_instance_count: "3"
+  appnode_instance_type: "t3.xlarge"
+  appnode_instance_count: "1"
+  gpunode_instance_type: "g3s.xlarge"
+  gpunode_instance_count: "1"
+  s3_bucket_name: "{{ [ stack_name, 'data/ocp/registry'] | join('-') }}"
+  s3_username: "{{ s3_username | default(stack_name + '-s3-openshift-user') }}"
+  cluster_admin_group_name: "cip-admin-team"
+  cluster_admin_group_members: "your user name and other admin"
+  cluster_autoscaling_min_size: 0
+  cluster_autoscaling_max_size: 6

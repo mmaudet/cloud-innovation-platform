@@ -1,0 +1,35 @@
+[OSEv3:children]
+masters
+nodes
+etcd
+
+[OSEv3:vars]
+openshift_deployment_type={{ocp_vars['openshift_deployment_type']}}
+ansible_ssh_user={%- if ocp_vars['openshift_deployment_type'] == 'openshift-enterprise' %}ec2-user{% else %}centos{% endif %}
+
+openshift_clusterid={{stack_name}}-{{cluster_id}}
+ansible_become=yes
+
+{% if ocp_vars['http_proxy_hostname'] %}
+openshift_http_proxy=http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/
+openshift_https_proxy=http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/
+openshift_no_proxy='localhost,.localdomain,.local,127.0.0.1,169.254.169.254,.internal,.svc,.priv,172.30.0.1,.elb.amazonaws.com,{{private_dns_domain}}'
+openshift_generate_no_proxy_hosts=false
+{% endif %}
+
+{% if ocp_vars['openshift_deployment_type'] == 'openshift-enterprise' %}
+# Red Hat changed its registry and we now need to authenticate
+oreg_auth_user="{{ ocp_vars['rhsm_user'] }}"
+oreg_auth_password="{{ ocp_vars['rhsm_password'] }}"
+{% endif %}
+
+# AWS Configuration
+openshift_cloudprovider_kind=aws
+# Note: IAM profiles may be used instead of storing API credentials on disk.
+openshift_cloudprovider_aws_access_key="{{ lookup('env','AWS_ACCESS_KEY_ID') }}"
+openshift_cloudprovider_aws_secret_key="{{ lookup('env','AWS_SECRET_ACCESS_KEY') }}"
+
+
+[masters]
+[etcd]
+[nodes]

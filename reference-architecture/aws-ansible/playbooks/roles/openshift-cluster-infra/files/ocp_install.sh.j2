@@ -1,0 +1,112 @@
+#!/bin/env bash
+# Description: this script will deploy an openshift cluster from the admin host
+################################################################################
+
+register_hosts() {
+    host_group=$1
+    
+    {% if ocp_vars['openshift_deployment_type'] == 'openshift-enterprise' %}
+    # Registering system on RHSM and enabling repos
+    ansible $host_group -m shell -a 'subscription-manager config --server.proxy_hostname={{ocp_vars["http_proxy_hostname"]}} --server.proxy_port={{ocp_vars["http_proxy_port"]}}'
+    ansible $host_group -m shell -a 'subscription-manager register --auto-attach --username={{ocp_vars["rhsm_user"]}} --password={{ocp_vars["rhsm_password"]}}'
+    ansible $host_group -m shell -a 'subscription-manager attach --pool={{ocp_vars["rhsm_openshift_pool_id"]}}'
+    ansible $host_group -m shell -a 'subscription-manager refresh'
+    ansible $host_group -m shell -a 'yum-config-manager --disable \*'
+    ansible $host_group -m shell -a 'subscription-manager repos --enable="rhel-7-server-rpms" --enable="rhel-7-server-extras-rpms" --enable="rhel-7-server-ose-3.11-rpms" --enable="rhel-7-server-ansible-2.6-rpms"'
+    {% else %}
+    # Nothing special to execute at this stage on CentOS
+    {% endif %}
+}
+
+prerequisites_cluster_nodes() {
+    # Make sure proxy is configured, if any
+    ansible nodes -m copy -a 'src=/etc/environment dest=/etc/environment'
+
+    register_hosts nodes
+    ansible-playbook playbooks/prerequisites.yml
+}
+
+prerequisites_admin_node() {
+    register_hosts localhost
+    yum -y install openshift-ansible
+}
+
+
+# Let's Go!
+cd /usr/share/ansible/openshift-ansible
+prerequisites_admin_node
+prerequisites_cluster_nodes
+ansible-playbook playbooks/deploy_cluster.yml
+
+# Grant team access
+ansible masters[0] -b -m shell -a "oc adm groups new {{ocp_vars['cluster_admin_group_name']}} {{ocp_vars['cluster_admin_group_members']}}"
+ansible masters[0] -b -m shell -a "oc adm policy add-cluster-role-to-group cluster-admin {{ocp_vars['cluster_admin_group_name']}} --rolebinding-name=cluster-admin"
+
+# Patch cluster to use http_proxy
+export HTTP_PROXY="http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/"
+export HTTPS_PROXY="http://{{ocp_vars['http_proxy_hostname']}}:{{ocp_vars['http_proxy_port']}}/"
+export NO_PROXY="{{ocp_vars['http_no_proxy']}}"
+
+ansible masters[0] -b -m shell -a 'oc -n openshift-monitoring set env deployment/grafana -c grafana-proxy http_proxy="$HTTP_PROXY"'
+ansible masters[0] -b -m shell -a 'oc -n openshift-monitoring set env deployment/grafana -c grafana-proxy https_proxy="$HTTP_PROXY"'
+ansible masters[0] -b -m shell -a 'oc -n openshift-monitoring set env deployment/grafana -c grafana-proxy no_proxy="$NO_PROXY"'
+ansible masters[0] -b -m shell -a 'oc -n openshift-monitoring set env statefulset/prometheus-k8s -c prometheus-proxy http_proxy="$HTTP_PROXY"'
+ansible masters[0] -b -m shell -a 'oc -n openshift-monitoring set env statefulset/prometheus-k8s -c prometheus-proxy https_proxy="$HTTP_PROXY"'
+ansible masters[0] -b -m shell -a 'oc -n openshift-monitoring set env statefulset/prometheus-k8s -c prometheus-proxy no_proxy="$NO_PROXY"'
+
+#TODO: find out how to escape the following command
+# ansible masters[0] -b -m shell -a 'oc -n openshift-console patch pod deployment console -p '{"spec":{"template":{"spec":{"containers":[{"name":"console","image":"docker.io/oiprnd/openshift-console:pr-1249"}]}}}}'
+#until then execute the next manually on the first master node
+# oc -n openshift-console patch deployment console -p '{"spec":{"template":{"spec":{"containers":[{"name":"console","image":"docker.io/oiprnd/openshift-console:pr-1249"}]}}}}'
+
+ansible masters[0] -b -m shell -a 'oc -n openshift-console set env deployment/console http_proxy="$HTTP_PROXY"'
+ansible masters[0] -b -m shell -a 'oc -n openshift-console set env deployment/console https_proxy="$HTTP_PROXY"'
+ansible masters[0] -b -m shell -a 'oc -n openshift-console set env deployment/console no_proxy="$NO_PROXY"'
+
+
+
+# GPU
+{% if add_gpu_node is defined %}
+{% for item in ocpcomputegpunodes.instances %}
+ansible masters[0] -b -m shell -a "oc label node {{item['tags']['Name']}}.{{ private_dns_domain }} openshift.com/gpu-accelerator=true"
+{% endfor %}
+{% endif %}
+
+
+# Setup Cluster Autoscaling
+
+## Building AMI
+ansible-playbook -i /opt/oip/cao_openshift_inventory \
+   playbooks/aws/openshift-cluster/build_ami.yml \
+   -e @/opt/oip/cao_build-ami-provisioning-vars.yaml
+
+## Fetching bootstrap file
+ansible masters[0] -b -m shell -a 'cat /etc/origin/master/bootstrap.kubeconfig' | tail -n +2 > /opt/oip/cao_bootstrap.kubeconfig
+
+## Creating user data
+sudo bash -c "cat << EOT > /opt/oip/cao_user_data.txt
+#cloud-config
+write_files:
+- path: /root/openshift_bootstrap/openshift_settings.yaml
+  owner: 'root:root'
+  permissions: '0640'
+  content: |
+    openshift_node_config_name: node-config-compute
+- path: /etc/origin/node/bootstrap.kubeconfig
+  owner: 'root:root'
+  permissions: '0640'
+  encoding: b64
+  content: |
+    $(base64 /opt/oip/cao_bootstrap.kubeconfig | sed '2,$s/^/    /')
+
+runcmd:
+- [ ansible-playbook, /root/openshift_bootstrap/bootstrap.yml]
+- [ systemctl, restart, systemd-hostnamed]
+- [ systemctl, restart, NetworkManager]
+- [ systemctl, enable, atomic-openshift-node]
+- [ systemctl, start, atomic-openshift-node]
+EOT"
+
+
+ansible masters[0] -b -m copy -a 'src=/opt/oip/cao_setup_cluster.sh dest=/root'
+

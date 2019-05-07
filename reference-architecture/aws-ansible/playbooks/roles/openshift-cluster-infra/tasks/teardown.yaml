@@ -1,0 +1,14 @@
+---
+- name: Tearing down OCP bastion/installer
+  cloudformation:
+    stack_name: "{{ stack_name }}-project-ocp"
+    state: "absent"
+    region: "{{ region }}"
+
+- name: Tearing down Project OCP
+  cloudformation:
+    stack_name: "{{ stack_name }}-project-ocp"
+    state: "absent"
+    region: "{{ region }}"
+
+

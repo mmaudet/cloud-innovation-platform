@@ -1,0 +1,941 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template creates the various IAM roles and CloudWatch-Logs of the core
+  infrastructure such as:
+    CIAP: WAF, NAT and VPN instances
+    Admin: Bastion instances
+
+  **WARNING** This template creates AWS resources. You will be billed for the AWS
+  resources used if you create a stack from this template. QS(0027)
+
+Parameters:
+  S3BucketPrefix:
+    Description: S3 Bucket Prefix
+    Type: String
+  pIAMAccount:
+    Description: ID of the account which will assume this role
+    Type: String
+    AllowedPattern: "^[0-9]{12}$"
+
+Resources:
+  ### IAM Users
+  #Role Administrator for AWS Developers
+  GRPGTSCOEADMIN:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"  
+      RoleName: "GRP-GTS-COE-ADMIN"
+  #Role OS Administrator
+  GRPGTSOSADM:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - !Ref COEOSADMIN
+      RoleName: "GRP-GTS-COE-OS-ADMIN"
+  #Role Inventory
+  InventoryRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"  
+      Policies:
+        - 
+          PolicyName: "ATM-GTS-COE-INVENTORY"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              -
+                Effect: "Allow"
+                Action: "ec2:DescribeTags"
+                Resource: "*"
+              - 
+                Effect: "Allow"
+                Action: "cloudwatch:GetMetricStatistics"
+                Resource: "*" 
+      RoleName: "ATM-GTS-COE-INVENTORY"
+  #Role DB Administrator
+  GRPGTSDBADM:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - !Ref COEDBADMIN
+      RoleName: "GRP-GTS-COE-DB-ADMIN"
+  #Role Net Administrator
+  GRPGTSNETADM:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - !Ref COENETADMIN
+      RoleName: "GRP-GTS-COE-NET-ADMIN"
+  #Role Net Readers
+  GRPGTSNETREAD:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonVPCReadOnlyAccess"
+      RoleName: "GRP-GTS-COE-NET-READ"
+  #Role Security Administrator
+  GRPGTSCOESECADM:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AdministratorAccess"  
+      RoleName: "GRP-GTS-COE-SEC-ADMIN"
+  #Role Security Auditors
+  GRPGTSCOESECAUDIT:
+    Type: "AWS::IAM::Role"
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          -
+            Effect: "Allow"
+            Principal: 
+              AWS:
+                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+            Action:
+              - "sts:AssumeRole"
+      Path: "/"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/SecurityAudit"  
+      RoleName: "GRP-GTS-COE-SEC-AUDIT"
+  #COEOSADMIN Policy
+  COEOSADMIN:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      Description: "COE OS ADMIN Managed Policy"
+      Path: "/"
+      PolicyDocument: {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Sid": "COEDecodeErrorMsg",
+                "Effect": "Allow",
+                "Action": [
+                    "sts:DecodeAuthorizationMessage",
+                    "support:*"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "COEOSAdminAllowInstanceRoleOsInfra",
+                "Effect": "Allow",
+                "Action": "iam:PassRole",
+                "Resource": !Join [ ":", [ "arn:aws:iam:", !Ref "AWS::AccountId" , "role/*"]]
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "kms:ListKeys",
+                    "kms:ListAliases"
+                ],
+                "Resource": [
+                    "*"
+                ]
+            },
+            {
+                "Effect": "Allow",
+                "Action": [
+                    "kms:ReEncrypt*",
+                    "kms:GenerateDataKey*",
+                    "kms:CreateGrant",
+                    "kms:DescribeKey*"
+                ],
+                "Resource": [
+                    "arn:aws:kms:eu-west-1:366994483597:key/5b2fa8fc-7626-4fa1-a677-7a660da9bb8c"
+                ]
+            },
+            {
+                "Sid": "COEOsAdminASRW",
+                "Effect": "Allow",
+                "Action": [
+                    "autoscaling:AttachInstances",
+                    "autoscaling:AttachLoadBalancers",
+                    "autoscaling:AttachLoadBalancerTargetGroups",
+                    "autoscaling:CompleteLifecycleAction",
+                    "autoscaling:CreateAutoScalingGroup",
+                    "autoscaling:CreateLaunchConfiguration",
+                    "autoscaling:CreateOrUpdateTags",
+                    "autoscaling:DeleteAutoScalingGroup",
+                    "autoscaling:DeleteLaunchConfiguration",
+                    "autoscaling:DeleteLifecycleHook",
+                    "autoscaling:DeleteNotificationConfiguration",
+                    "autoscaling:DeletePolicy",
+                    "autoscaling:DeleteScheduledAction",
+                    "autoscaling:DeleteTags",
+                    "autoscaling:DescribeAccountLimits",
+                    "autoscaling:DescribeAdjustmentTypes",
+                    "autoscaling:DescribeAutoScalingGroups",
+                    "autoscaling:DescribeAutoScalingInstances",
+                    "autoscaling:DescribeAutoScalingNotificationTypes",
+                    "autoscaling:DescribeLaunchConfigurations",
+                    "autoscaling:DescribeLifecycleHooks",
+                    "autoscaling:DescribeLifecycleHookTypes",
+                    "autoscaling:DescribeLoadBalancers",
+                    "autoscaling:DescribeLoadBalancerTargetGroups",
+                    "autoscaling:DescribeMetricCollectionTypes",
+                    "autoscaling:DescribeNotificationConfigurations",
+                    "autoscaling:DescribePolicies",
+                    "autoscaling:DescribeScalingActivities",
+                    "autoscaling:DescribeScalingProcessTypes",
+                    "autoscaling:DescribeScheduledActions",
+                    "autoscaling:DescribeTags",
+                    "autoscaling:DescribeTerminationPolicyTypes",
+                    "autoscaling:DetachInstances",
+                    "autoscaling:DetachLoadBalancers",
+                    "autoscaling:DetachLoadBalancerTargetGroups",
+                    "autoscaling:DisableMetricsCollection",
+                    "autoscaling:EnableMetricsCollection",
+                    "autoscaling:EnterStandby",
+                    "autoscaling:ExecutePolicy",
+                    "autoscaling:ExitStandby",
+                    "autoscaling:PutLifecycleHook",
+                    "autoscaling:PutNotificationConfiguration",
+                    "autoscaling:PutScalingPolicy",
+                    "autoscaling:PutScheduledUpdateGroupAction",
+                    "autoscaling:RecordLifecycleActionHeartbeat",
+                    "autoscaling:ResumeProcesses",
+                    "autoscaling:SetDesiredCapacity",
+                    "autoscaling:SetInstanceHealth",
+                    "autoscaling:SetInstanceProtection",
+                    "autoscaling:SuspendProcesses",
+                    "autoscaling:TerminateInstanceInAutoScalingGroup",
+                    "autoscaling:UpdateAutoScalingGroup"
+                ],
+                "Resource": "*"
+            },
+            {
+                "Sid": "COEOsAdminEC2RW",
+                "Effect": "Allow",
+                "Action": [
+                    "ec2:AssignPrivateIpAddresses",
+                    "ec2:AttachNetworkInterface",
+                    "ec2:AttachVolume",
+                    "ec2:BundleInstance",
+                    "ec2:CancelBundleTask",
+                    "ec2:CancelConversionTask",
+                    "ec2:CancelExportTask",
+                    "ec2:CancelImportTask",
+                    "ec2:CopyImage",
+                    "ec2:CopySnapshot",
+                    "ec2:CreateImage",
+                    "ec2:CreateInstanceExportTask",
+                    "ec2:CreateKeyPair",
+                    "ec2:CreateNetworkInterface",
+                    "ec2:CreatePlacementGroup",
+                    "ec2:CreateSnapshot",
+                    "ec2:CreateTags",
+                    "ec2:CreateVolume",
+                    "ec2:DeleteKeyPair",
+                    "ec2:DeleteNetworkInterface",
+                    "ec2:DeletePlacementGroup",
+                    "ec2:DeleteSnapshot",
+                    "ec2:DeleteTags",
+                    "ec2:DeleteVolume",
+                    "ec2:DeregisterImage",
+                    "ec2:DescribeAccountAttributes",
+                    "ec2:DescribeBundleTasks",
+                    "ec2:DescribeConversionTasks",
+                    "ec2:DescribeExportTasks",
+                    "ec2:DescribeIdentityIdFormat",
+                    "ec2:DescribeIdFormat",
+                    "ec2:DescribeImageAttribute",
+                    "ec2:DescribeImages",
+                    "ec2:DescribeImportImageTasks",
+                    "ec2:DescribeImportSnapshotTasks",
+                    "ec2:DescribeInstanceAttribute",
+                    "ec2:DescribeInstances",
+                    "ec2:DescribeInstanceStatus",
+                    "ec2:DescribeKeyPairs",
+                    "ec2:DescribeNetworkInterfaceAttribute",
+                    "ec2:DescribeNetworkInterfaces",
+                    "ec2:DescribePlacementGroups",
+                    "ec2:DescribeRegions",
+                    "ec2:DescribeSnapshotAttribute",
+                    "ec2:DescribeSnapshots",
+                    "ec2:DescribeTags",
+                    "ec2:DescribeVolumeAttribute",
+                    "ec2:DescribeVolumes",
+                    "ec2:DescribeVolumeStatus",
+                    "ec2:DetachNetworkInterface",
+                    "ec2:DetachVolume",
+                    "ec2:EnableVolumeIO",
+                    "ec2:GetConsoleOutput",
+                    "ec2:GetConsoleScreenshot",
+                    "ec2:GetPasswordData",
+                    "ec2:ImportImage",
+                    "ec2:ImportInstance",
+                    "ec2:ImportKeyPair",
+                    "ec2:ImportSnapshot",
+                    "ec2:ImportVolume",
+                    "ec2:ModifyIdentityIdFormat",
+                    "ec2:ModifyIdFormat",
+                    "ec2:ModifyImageAttribute",
+                    "ec2:ModifyInstanceAttribute",
+                    "ec2:ModifyInstancePlacement",
+                    "ec2:ModifyNetworkInterfaceAttribute",
+                    "ec2:ModifySnapshotAttribute",
+                    "ec2:ModifyVolumeAttribute",
+                    "ec2:MonitorInstances",
+                    "ec2:RebootInstances",
+                    "ec2:RegisterImage",
+                    "ec2:ReportInstanceStatus",
+                    "ec2:ResetImageAttribute",
+                    "ec2:ResetInstanceAttribute",
+                    "ec2:ResetNetworkInterfaceAttribute",
+                    "ec2:ResetSnapshotAttribute",
+                    "ec2:RunInstances",
+                    "ec2:StartInstances",
+                    "ec2:StopInstances",
+                    "ec2:TerminateInstances",
+                    "ec2:UnassignPrivateIpAddresses",
+                    "ec2:UnmonitorInstances"
+                ],
+                "Resource": "*"
+            }
+        ]
+    }
+  #COEDBADMIN Policy
+  COEDBADMIN:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      Description: "COE DB ADMIN Managed Policy"
+      Path: "/"
+      PolicyDocument: {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "InfraPrdRDSFull",
+            "Effect": "Allow",
+            "Action": [
+              "rds:*"
+            ],
+            "Resource": [
+              "*"
+            ]
+          },
+          {
+            "Sid": "InfraPrdDMSFull",
+            "Effect": "Allow",
+            "Action": [
+              "dms:*"
+            ],
+            "Resource": "*"
+          }
+        ]
+      }
+  #COENETADMIN Policy
+  COENETADMIN:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      Description: "COE NET ADMIN Managed Policy"
+      Path: "/"
+      PolicyDocument: {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Sid": "COENetworkVPCRW",
+            "Effect": "Allow",
+            "Action": [
+              "ec2:AcceptVpcPeeringConnection",
+              "ec2:AssociateDhcpOptions",
+              "ec2:AssociateRouteTable",
+              "ec2:CreateDhcpOptions",
+              "ec2:CreateFlowLogs",
+              "ec2:CreateRoute",
+              "ec2:CreateRouteTable",
+              "ec2:CreateSubnet",
+              "ec2:CreateVpc",
+              "ec2:CreateVpcPeeringConnection",
+              "ec2:DeleteDhcpOptions",
+              "ec2:DeleteFlowLogs",
+              "ec2:DeleteRoute",
+               "ec2:DeleteRouteTable",
+               "ec2:DeleteSubnet",
+               "ec2:DeleteVpc",
+               "ec2:DeleteVpcPeeringConnection",
+               "ec2:DescribeCustomerGateways",
+               "ec2:DescribeDhcpOptions",
+               "ec2:DescribeFlowLogs",
+               "ec2:DescribeInternetGateways",
+               "ec2:DescribeNatGateways",
+               "ec2:DescribePrefixLists",
+               "ec2:DescribeRouteTables",
+               "ec2:DescribeSubnets",
+               "ec2:DescribeVpcAttribute",
+               "ec2:DescribeVpcEndpoints",
+               "ec2:DescribeVpcEndpointServices",
+               "ec2:DescribeVpcPeeringConnections",
+               "ec2:DescribeVpcs",
+               "ec2:DescribeVpnConnections",
+               "ec2:DescribeVpnGateways",
+               "ec2:DisableVgwRoutePropagation",
+               "ec2:DisassociateRouteTable",
+               "ec2:EnableVgwRoutePropagation",
+               "ec2:ModifySubnetAttribute",
+               "ec2:ModifyVpcAttribute",
+               "ec2:ModifyVpcEndpoint",
+               "ec2:ModifyVpcPeeringConnectionOptions",
+               "ec2:RejectVpcPeeringConnection",
+               "ec2:ReplaceNetworkAclAssociation",
+               "ec2:ReplaceRoute",
+               "ec2:ReplaceRouteTableAssociation"
+             ],
+             "Resource": "*"
+           },
+           {
+             "Sid": "COENetworkTagsRW",
+             "Effect": "Allow",
+             "Action": [
+               "ec2:CreateTags",
+               "ec2:DeleteTags",
+               "ec2:DescribeTags"
+             ],
+             "Resource": "*"
+           },
+           {
+             "Sid": "COENetworkSecurityGroupsRW",
+             "Effect": "Allow",
+             "Action": [
+               "ec2:AuthorizeSecurityGroupEgress",
+               "ec2:AuthorizeSecurityGroupIngress",
+               "ec2:CreateSecurityGroup",
+               "ec2:DeleteSecurityGroup",
+               "ec2:DescribeSecurityGroupReferences",
+               "ec2:DescribeSecurityGroups",
+               "ec2:DescribeStaleSecurityGroups",
+               "ec2:RevokeSecurityGroupEgress",
+               "ec2:RevokeSecurityGroupIngress"
+             ],
+             "Resource": "*"
+           },
+           {
+             "Sid": "COENetworkNaclRW",
+             "Effect": "Allow",
+             "Action": [
+               "ec2:CreateNetworkAcl",
+               "ec2:CreateNetworkAclEntry",
+               "ec2:DeleteNetworkAcl",
+               "ec2:DeleteNetworkAclEntry",
+               "ec2:DescribeNetworkAcls",
+               "ec2:ReplaceNetworkAclEntry"
+             ],
+             "Resource": "*"
+           },
+           {
+             "Sid": "COENetworkCFNRW",
+             "Effect": "Allow",
+             "Action": [
+               "cloudformation:CancelUpdateStack",
+               "cloudformation:ContinueUpdateRollback",
+               "cloudformation:CreateChangeSet",
+               "cloudformation:CreateStack",
+               "cloudformation:DeleteChangeSet",
+               "cloudformation:DeleteStack",
+               "cloudformation:DescribeAccountLimits",
+               "cloudformation:DescribeChangeSet",
+               "cloudformation:DescribeStackEvents",
+               "cloudformation:DescribeStackResource",
+               "cloudformation:DescribeStackResources",
+               "cloudformation:DescribeStacks",
+               "cloudformation:EstimateTemplateCost",
+               "cloudformation:ExecuteChangeSet",
+               "cloudformation:GetStackPolicy",
+               "cloudformation:GetTemplate",
+               "cloudformation:GetTemplateSummary",
+               "cloudformation:ListChangeSets",
+               "cloudformation:ListStackResources",
+               "cloudformation:ListStacks",
+               "cloudformation:SetStackPolicy",
+               "cloudformation:SignalResource",
+               "cloudformation:UpdateStack",
+               "cloudformation:ValidateTemplate"
+             ],
+             "Resource": "*"
+           },
+           {
+             "Sid": "COENetworkDirConRW",
+             "Effect": "Allow",
+             "Action": [
+               "directconnect:AllocatePrivateVirtualInterface",
+               "directconnect:AllocatePublicVirtualInterface",
+               "directconnect:ConfirmPrivateVirtualInterface",
+               "directconnect:ConfirmPublicVirtualInterface",
+               "directconnect:CreatePrivateVirtualInterface",
+               "directconnect:CreatePublicVirtualInterface",
+               "directconnect:DeleteVirtualInterface",
+               "directconnect:DescribeConnectionLoa",
+               "directconnect:DescribeConnections",
+               "directconnect:DescribeConnectionsOnInterconnect",
+               "directconnect:DescribeInterconnectLoa",
+               "directconnect:DescribeInterconnects",
+               "directconnect:DescribeLocations",
+               "directconnect:DescribeVirtualGateways",
+               "directconnect:DescribeVirtualInterfaces"
+             ],
+             "Resource": "*"
+           },
+           {
+             "Sid": "COENetworkELBRW",
+             "Effect": "Allow",
+             "Action": [
+               "elasticloadbalancing:AddTags",
+               "elasticloadbalancing:ApplySecurityGroupsToLoadBalancer",
+               "elasticloadbalancing:AttachLoadBalancerToSubnets",
+               "elasticloadbalancing:ConfigureHealthCheck",
+               "elasticloadbalancing:CreateAppCookieStickinessPolicy",
+               "elasticloadbalancing:CreateLBCookieStickinessPolicy",
+               "elasticloadbalancing:CreateLoadBalancer",
+               "elasticloadbalancing:CreateLoadBalancerListeners",
+               "elasticloadbalancing:CreateLoadBalancerPolicy",
+               "elasticloadbalancing:DeleteLoadBalancer",
+               "elasticloadbalancing:DeleteLoadBalancerListeners",
+               "elasticloadbalancing:DeleteLoadBalancerPolicy",
+               "elasticloadbalancing:DeregisterInstancesFromLoadBalancer",
+               "elasticloadbalancing:DescribeInstanceHealth",
+               "elasticloadbalancing:DescribeLoadBalancerAttributes",
+               "elasticloadbalancing:DescribeLoadBalancerPolicies",
+               "elasticloadbalancing:DescribeLoadBalancerPolicyTypes",
+               "elasticloadbalancing:DescribeLoadBalancers",
+               "elasticloadbalancing:DescribeTags",
+               "elasticloadbalancing:DetachLoadBalancerFromSubnets",
+               "elasticloadbalancing:DisableAvailabilityZonesForLoadBalancer",
+               "elasticloadbalancing:EnableAvailabilityZonesForLoadBalancer",
+               "elasticloadbalancing:ModifyLoadBalancerAttributes",
+               "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+               "elasticloadbalancing:RemoveTags",
+               "elasticloadbalancing:SetLoadBalancerListenerSSLCertificate",
+               "elasticloadbalancing:SetLoadBalancerPoliciesForBackendServer",
+               "elasticloadbalancing:SetLoadBalancerPoliciesOfListener"
+             ],
+             "Resource": "*"
+           }
+         ]
+       }
+  ### VPC CIAP
+
+  ### BEGIN Reverse Proxy / WAF
+
+  WAFEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - !Ref 'WAFEC2Role'
+      Path: /
+
+  WAFEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: CloudWatch-PutMetricData
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+      - PolicyName: CloudWatch-Logs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:PutLogEvents
+            - logs:CreateLogStream
+            - logs:DescribeLogStreams
+            - logs:CreateLogGroup
+            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+                ':log-group:', !Ref 'WAFCloudWatchLogsGroup', ':log-stream:*']]
+      - PolicyName: S3-Buckets-Access
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:Get*
+            - s3:List*
+            Resource:
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/waf/*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/waf/*']]
+
+  WAFCloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: '14'
+
+  ### END Reverse Proxy / WAF
+
+  ### BEGIN NAT instance / Squid proxy
+
+  NATEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - !Ref 'NATEC2Role'
+      Path: /
+
+  NATEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: CloudWatch-PutMetricData
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+      - PolicyName: CloudWatch-Logs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:PutLogEvents
+            - logs:CreateLogStream
+            - logs:DescribeLogStreams
+            - logs:CreateLogGroup
+            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+                ':log-group:', !Ref 'NATCloudWatchLogsGroup', ':log-stream:*']]
+      - PolicyName: S3-Buckets-Access
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:Get*
+            - s3:List*
+            Resource:
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/bootstrap/nat/*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/nat/*']]
+
+  NATCloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: '14'
+
+  ### END NAT instance / Squid proxy
+
+  ### BEGIN VPN Instances
+
+  VPNEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - !Ref 'VPNEC2Role'
+      Path: /
+
+  VPNEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: CloudWatch-PutMetricData
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+      - PolicyName: CloudWatch-Logs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:PutLogEvents
+            - logs:CreateLogStream
+            - logs:DescribeLogStreams
+            - logs:CreateLogGroup
+            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+                ':log-group:', !Ref 'VPNCloudWatchLogsGroup', ':log-stream:*']]
+      - PolicyName: S3-Buckets-Access
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:Get*
+            - s3:List*
+            Resource:
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/vpn/*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/vpn/*']]
+
+  VPNCloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: '14'
+
+  ### END VPN Instances
+
+  ### BEGIN Admin Instances
+
+  BastionEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - !Ref 'BastionEC2Role'
+      Path: /
+
+  BastionEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: CloudWatch-PutMetricData
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+      - PolicyName: CloudWatch-Logs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:PutLogEvents
+            - logs:CreateLogStream
+            - logs:DescribeLogStreams
+            - logs:CreateLogGroup
+            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+                ':log-group:', !Ref 'BastionCloudWatchLogsGroup', ':log-stream:*']]
+      - PolicyName: S3-Buckets-Access
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:Get*
+            - s3:List*
+            Resource:
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+
+  BastionCloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: '14'
+
+  ### END Bastion Instances
+
+
+Outputs:
+  WAFEC2Role:
+    Description: Role for WAF Instances
+    Value: !Ref WAFEC2Role
+    Export:
+      Name: !Sub ${AWS::StackName}-WAFEC2Role
+  WAFEC2RoleID:
+    Description: RoleId of WAF Instances Role
+    Value: !GetAtt [WAFEC2Role, Arn]
+    Export:
+      Name: !Sub ${AWS::StackName}-WAFEC2RoleID
+  WAFEC2InstanceProfile:
+    Description: Instance Profile for WAF Instances
+    Value: !Ref WAFEC2InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-WAFEC2InstanceProfile
+  WAFCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for WAF Instances
+    Value: !Ref WAFCloudWatchLogsGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-WAFCloudWatchLogsGroup
+  NATEC2Role:
+    Description: Role for NAT Instances
+    Value: !Ref NATEC2Role
+    Export:
+      Name: !Sub ${AWS::StackName}-NATEC2Role
+  NATEC2RoleID:
+    Description: RoleId of NAT Instances Role
+    Value: !GetAtt [NATEC2Role, Arn]
+    Export:
+      Name: !Sub ${AWS::StackName}-NATEC2RoleID
+  NATEC2InstanceProfile:
+    Description: Instance Profile for NAT Instances
+    Value: !Ref NATEC2InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-NATEC2InstanceProfile
+  NATCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for WAF Instances
+    Value: !Ref NATCloudWatchLogsGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-NATCloudWatchLogsGroup
+  VPNEC2Role:
+    Description: Role for VPN Instances
+    Value: !Ref VPNEC2Role
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNEC2Role
+  VPNEC2RoleID:
+    Description: RoleId of VPN Instances Role
+    Value: !GetAtt [VPNEC2Role, Arn]
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNEC2RoleID
+  VPNEC2InstanceProfile:
+    Description: Instance Profile for VPN Instances
+    Value: !Ref VPNEC2InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNEC2InstanceProfile
+  VPNCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for VPN Instances
+    Value: !Ref VPNCloudWatchLogsGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-VPNCloudWatchLogsGroup
+  BastionEC2Role:
+    Description: Role for Bastion Instances
+    Value: !Ref BastionEC2Role
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionEC2Role
+  BastionEC2RoleID:
+    Description: RoleId of Bastion Instances Role
+    Value: !GetAtt [BastionEC2Role, Arn]
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionEC2RoleID
+  BastionEC2InstanceProfile:
+    Description: Instance Profile for Bastion Instances
+    Value: !Ref BastionEC2InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionEC2InstanceProfile
+  BastionCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for Bastion Instances
+    Value: !Ref BastionCloudWatchLogsGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionCloudWatchLogsGroup
+  BastionCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for Bastion Instances
+    Value: !Ref BastionCloudWatchLogsGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-BastionCloudWatchLogsGroup
+

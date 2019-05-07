@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  This template creates required resources to deploy Red Hat OCP in brownfield mode
+  using https://github.com/openshift/openshift-ansible-contrib
+  It will create the following resources in existing Open Innovation Lab core
+  infrastructure:
+    SubNets: 3 publics and 3 privates in VPC Project
+  **WARNING** This template creates AWS resources. You will be billed for the AWS
+  resources used if you create a stack from this template. QS(0027)
+
+Parameters:
+  NumberOfAZs:
+    AllowedValues:
+    - '2'
+    - '3'
+    - '4'
+    Default: '2'
+    Description: Number of Availability Zones to use in the VPC. This must match your
+      selections in the list of Availability Zones parameter.
+    Type: String
+  DeployNATResources:
+    Default: true
+    Description: Deploy NAT resources or not
+    Type: String
+  VPCProjectCIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.128.0/17
+    Description: CIDR block for the Project VPC
+    Type: String
+  VPCProjectID:
+    Description: VPC Project ID
+    Type: String
+  ProjectRouteTableID:
+    Description: Project RouteTable ID
+    Type: String
+{% for idx in range(1, project_ocp_nb_subnets|int + 1) %}
+  ProjectOCPPubSubNet{{ idx }}CIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.{{ 128 + ( idx - 1 ) * 4 }}.0/24
+    Description: CIDR block for Project OCP Pub subnet {{ idx }} located in Availability Zone {{ idx }}
+    Type: String
+  ProjectOCPPrivSubNet{{ idx }}CIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.{{ 128 + ( idx - 1 ) * 4 + 1 }}.0/24
+    Description: CIDR block for Project OCP Priv subnet {{ idx }} located in Availability Zone {{ idx }}
+    Type: String
+{% endfor %}
+Conditions:
+  1AZCondition: !Or [!Equals [!Ref NumberOfAZs, 1], {Condition: 2AZCondition}]
+  2AZCondition: !Or [!Equals [!Ref NumberOfAZs, 2], {Condition: 3AZCondition}]
+  3AZCondition: !Or [!Equals [!Ref NumberOfAZs, 3], {Condition: 4AZCondition}]
+  4AZCondition: !Equals [!Ref NumberOfAZs, 4]
+  NATInstanceCondition: !Equals [!Ref DeployNATResources, true]
+  NVirginiaRegionCondition: !Equals [!Ref 'AWS::Region', us-east-1]
+
+Resources:
+{% for idx in range(1, project_ocp_nb_subnets|int + 1) %}
+  ProjectOCPPubSubNet{{ idx }}:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'VPCProjectID'
+      CidrBlock: !Ref 'ProjectOCPPubSubNet{{ idx }}CIDR'
+      AvailabilityZone:
+        Fn::Select:
+          - {{ idx - 1 }}
+          - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'ProjectOCPPub-subnet-{{ idx }}']]
+      - Key: Network
+        Value: ProjectOCPPub
+      - Key: kubernetes.io/cluster/{{stack_name}}
+        Value: owned
+  ProjectOCPPubSubNet{{ idx }}RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'ProjectOCPPubSubNet{{ idx }}'
+      RouteTableId: !Ref 'ProjectRouteTableID'
+  ProjectOCPPrivSubNet{{ idx }}:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'VPCProjectID'
+      CidrBlock: !Ref 'ProjectOCPPrivSubNet{{ idx }}CIDR'
+      AvailabilityZone:
+        Fn::Select:
+          - {{ idx - 1 }}
+          - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'ProjectOCPPriv-subnet-{{ idx }}']]
+      - Key: Network
+        Value: ProjectOCPPub
+      - Key: kubernetes.io/cluster/{{stack_name}}
+        Value: owned
+  ProjectOCPPrivSubNet{{ idx }}RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'ProjectOCPPrivSubNet{{ idx }}'
+      RouteTableId: !Ref 'ProjectRouteTableID'
+{% endfor %}
+Outputs:
+{% for idx in range(1, project_ocp_nb_subnets|int + 1) %}
+  ProjectOCPPubSubNet{{ idx }}CIDR:
+    Description: Project OCP Public SubNet ID in Availability Zone {{ idx }}
+    Value: !Ref 'ProjectOCPPubSubNet{{ idx }}CIDR'
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectOCPPubSubNet{{ idx }}CIDR'
+  ProjectOCPPubSubNet{{ idx }}ID:
+    Description: Project OCP Public SubNet ID in Availability Zone {{ idx }}
+    Value: !Ref 'ProjectOCPPubSubNet{{ idx }}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectOCPPubSubNet{{ idx }}ID'
+  ProjectOCPPrivSubNet{{ idx }}CIDR:
+    Description: Project OCP Private SubNet ID in Availability Zone {{ idx }}
+    Value: !Ref 'ProjectOCPPrivSubNet{{ idx }}CIDR'
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectOCPPrivSubNet{{ idx }}CIDR'
+  ProjectOCPPrivSubNet{{ idx }}ID:
+    Description: Project OCP Private SubNet ID in Availability Zone {{ idx }}
+    Value: !Ref 'ProjectOCPPrivSubNet{{ idx }}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectOCPPrivSubNet{{ idx }}ID'
+{% endfor %}

@@ -1,0 +1,316 @@
+---
+- name: Creating Installer IAM Role
+  iam:
+    iam_type: role
+    name: "{{ stack_name }}-installer-role"
+    state: present
+    trust_policy:
+      Version: '2012-10-17'
+      Statement:
+      - Effect: Allow
+        Action: sts:AssumeRole
+        Principal:
+          AWS: arn:aws:iam::{{ root_account['account_id'] }}:user/{{ root_account['iam_user'] }}
+          Service: ec2.amazonaws.com
+  register: iam
+
+- name: Saving installer role ID
+  set_fact: installer_role_id="{{ iam['role_result']['role_id'] }}"
+
+
+- name: Creating rendered files directories
+  file:
+    path: roles/cloudformation-infra/files/rendered/{{ item }}
+    state: directory
+    mode: 0755
+  with_items:
+    - "{{ stack_name }}"
+    - "{{ stack_name }}/bootstrap"
+    - "{{ stack_name }}/bootstrap/bastion"
+    - "{{ stack_name }}/bootstrap/common"
+    - "{{ stack_name }}/bootstrap/common/pubkeys"
+    - "{{ stack_name }}/bootstrap/nat"
+    - "{{ stack_name }}/bootstrap/vpn"
+    - "{{ stack_name }}/bootstrap/waf"
+    - "{{ stack_name }}/bootstrap/waf/etc/nginx/conf.d"
+
+
+- name: Rendering Installer Role Policy Templates
+  #template: src=roles/cloudformation-infra/files/{{ item }}.json.j2 dest=roles/cloudformation-infra/files/rendered/{{ stack_name }}-{{ item }}.json
+  template:
+    src: roles/cloudformation-infra/files/{{ item }}.json.j2
+    dest: roles/cloudformation-infra/files/rendered/{{ stack_name }}/{{ item }}.json
+  with_items:
+    - role-policy-oip-installer
+
+- name: Attaching policies to Installer IAM Role
+  iam_policy:
+    iam_type: role
+    iam_name: "{{ stack_name }}-installer-role"
+    profile: "{{ aws_cli_installer_profile }}"
+    policy_name: tobetuned
+    state: present
+    policy_json: "{{ lookup('file', 'rendered/' + stack_name + '/' + item + '.json') }}"
+  with_items:
+    - role-policy-oip-installer
+
+- name: Rendering Other Templates
+  template:
+    src: roles/cloudformation-infra/files/{{ item }}.j2
+    dest: roles/cloudformation-infra/files/rendered/{{ stack_name }}/{{ item }}
+  with_items:
+    - network.yaml
+    - security-groups.yaml
+    - network-functions.yaml
+    - project-ocp-infra.yaml
+    - roles-logs-profiles.yaml
+    - bootstrap/waf/etc/nginx/conf.d/virtual-ocp.conf
+  when: create_infra == "yes"
+
+- name: Create Network Infrastructure
+  cloudformation:
+    stack_name: "{{ stack_name }}-net"
+    state: "present"
+    region: "{{ region }}"
+    profile: "{{ aws_cli_installer_profile }}"
+    template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/network.yaml"
+    template_parameters:
+      NumberOfAZs: "3"
+      VPCCiapCIDR: "{{ ciap_cidr }}"
+      CiapHostingSubNet1CIDR: "{{ ciap_hosting_subnet1_cidr }}"
+      CiapHostingSubNet2CIDR: "{{ ciap_hosting_subnet2_cidr }}"
+      CiapBrowsingSubNet1CIDR: "{{ ciap_browsing_subnet1_cidr }}"
+      CiapBrowsingSubNet2CIDR: "{{ ciap_browsing_subnet2_cidr }}"
+      CiapVPNSubNet1CIDR: "{{ ciap_vpn_subnet1_cidr }}"
+      CiapVPNSubNet2CIDR: "{{ ciap_vpn_subnet2_cidr }}"
+      VPCAdminCIDR: "{{ admin_cidr }}"
+      AdminSubNet1CIDR: "{{ admin_subnet1_cidr }}"
+      AdminSubNet2CIDR: "{{ admin_subnet2_cidr }}"
+      VPCTechCIDR: "{{ tech_cidr }}"
+      TechSubNet1CIDR: "{{ tech_subnet1_cidr }}"
+      TechSubNet2CIDR: "{{ tech_subnet2_cidr }}"
+      VPCProjectCIDR: "{{ project_cidr }}"
+      S3BucketPrefix: "{{ s3_bucket_prefix | lower }}"
+      PrivateDNSDomain: "{{ private_dns_domain | lower }}"
+    tags:
+      OpenInnovationLabStack: "{{ stack_name }}-network"
+  when: create_infra == "yes"
+  register: cfnet
+
+- name: Create Roles, Instance Profiles and CloudWatch-Logs 
+  cloudformation:
+    stack_name: "{{ stack_name }}-rlp"
+    state: "present"
+    region: "{{ region }}"
+    profile: "{{ aws_cli_installer_profile }}"
+    template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/roles-logs-profiles.yaml"
+    template_parameters:
+      S3BucketPrefix: "{{ s3_bucket_prefix | lower }}"
+      pIAMAccount: "{{ root_account['coe_account_id'] }}"
+    tags:
+      OpenInnovationLabStack: "{{ stack_name }}-rlp"
+  when: create_infra == "yes"
+  register: cfrlp
+
+
+- name: Saving WAFEC2Role instance role_id
+  iam_role_facts: name="{{ cfrlp['stack_outputs']['WAFEC2Role'] }}"
+  register: roleid_WAFEC2Role
+  when: create_infra == "yes"
+
+- name: Saving NATEC2Role instance role_id
+  iam_role_facts: name="{{ cfrlp['stack_outputs']['NATEC2Role'] }}"
+  register: roleid_NATEC2Role
+  when: create_infra == "yes"
+
+- name: Saving VPNEC2Role instance role_id
+  iam_role_facts: name="{{ cfrlp['stack_outputs']['VPNEC2Role'] }}"
+  register: roleid_VPNEC2Role
+  when: create_infra == "yes"
+
+- name: Saving BastionEC2Role instance role_id
+  iam_role_facts: name="{{ cfrlp['stack_outputs']['BastionEC2Role'] }}"
+  register: roleid_BastionEC2Role
+  when: create_infra == "yes"
+
+- name: Rendering S3 Bucket Policy Templates
+  #template: src=roles/cloudformation-infra/files/s3-bucket-policy-{{ item }}.json.j2 dest=roles/cloudformation-infra/files/rendered/{{ stack_name }}-s3-bucket-policy-{{ item }}.json
+  template:
+    src: roles/cloudformation-infra/files/s3-bucket-policy-{{ item }}.json.j2
+    dest: roles/cloudformation-infra/files/rendered/{{ stack_name }}/s3-bucket-policy-{{ item }}.json
+  with_items:
+    - "data"
+    - "logs"
+  when: create_infra == "yes"
+
+
+- name: Creating S3 Buckets
+  s3_bucket:
+    name: "{{ s3_bucket_prefix | lower + '-' + item }}"
+    region: "{{ region }}"
+    state: present
+    profile: "{{ aws_cli_installer_profile }}"
+    policy: "{{ lookup('file', 'rendered/' + stack_name + '/s3-bucket-policy-' + item + '.json') }}"
+  with_items:
+    - "data"
+    - "logs"
+
+- name: Create Security Groups
+  cloudformation:
+    stack_name: "{{ stack_name }}-secgrp"
+    state: "present"
+    region: "{{ region }}"
+    profile: "{{ aws_cli_installer_profile }}"
+    template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/security-groups.yaml"
+    template_parameters:
+      VPCCiapID: "{{ cfnet['stack_outputs']['VPCCiapID'] }}"
+      VPCCiapCIDR: "{{ ciap_cidr }}"
+      VPCAdminID: "{{ cfnet['stack_outputs']['VPCAdminID'] }}"
+      VPCAdminCIDR: "{{ admin_cidr }}"
+      VPCTechID: "{{ cfnet['stack_outputs']['VPCTechID'] }}"
+      VPCTechCIDR: "{{ tech_cidr }}"
+      VPCProjectID: "{{ cfnet['stack_outputs']['VPCProjectID'] }}"
+      VPCProjectCIDR: "{{ project_cidr }}"
+    tags:
+      OpenInnovationLabStack: "{{ stack_name }}-secgrp"
+  when: create_infra == "yes"
+  register: cfsecgrp
+
+- name: Bootstrap generating the list of templates to process, formatted as a json list
+  command: python -c 'import os, json; print json.dumps([os.path.join(dp, f)[2:] for dp, dn, fn in os.walk(os.path.expanduser(".")) for f in fn if f.endswith(".j2")])'
+  args:
+    chdir: roles/cloudformation-infra/files/bootstrap
+  register: bootstrap_files_cmd
+
+- name: Bootstrap rendering templates
+  template:
+    src: "roles/cloudformation-infra/files/bootstrap/{{ item }}"
+    dest: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/bootstrap/{{ item | regex_replace('.j2$', '') }}"
+  with_items: "{{ bootstrap_files_cmd.stdout | from_json }}"
+  when: create_infra == "yes"
+
+- name: Synchronizing bootstrap content
+  s3_sync:
+    bucket: "{{ stack_name }}-data"
+    key_prefix: bootstrap/
+    file_root: roles/cloudformation-infra/files/rendered/{{ stack_name }}/bootstrap/
+    file_change_strategy: checksum
+    delete: yes
+
+- name: Create Network Functions
+  cloudformation:
+    stack_name: "{{ stack_name }}-netfunc"
+    state: "present"
+    region: "{{ region }}"
+    profile: "{{ aws_cli_installer_profile }}"
+    template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/network-functions.yaml"
+    template_parameters:
+      NumberOfAZs: "2"
+      KeyPairName: "{{ keypair }}"
+      PublicDNSDomain: "{{ public_dns_domain }}"
+      PrivateDNSDomain: "{{ private_dns_domain }}"
+      WAFSecGrpID: "{{ cfsecgrp['stack_outputs']['WAFInstanceSecurityGroupID'] }}"
+      WAFELBSecGrpID: "{{ cfsecgrp['stack_outputs']['WAFELBSecurityGroupID'] }}"
+      WAFEC2InstanceProfile: "{{ cfrlp['stack_outputs']['WAFEC2InstanceProfile'] }}"
+      WAFCloudWatchLogsGroup: "{{ cfrlp['stack_outputs']['WAFCloudWatchLogsGroup'] }}"
+      NATSecGrpID: "{{ cfsecgrp['stack_outputs']['NATInstanceSecurityGroupID'] }}"
+      NATELBSecGrpID: "{{ cfsecgrp['stack_outputs']['NATELBSecurityGroupID'] }}"
+      NATEC2InstanceProfile: "{{ cfrlp['stack_outputs']['NATEC2InstanceProfile'] }}"
+      NATCloudWatchLogsGroup: "{{ cfrlp['stack_outputs']['NATCloudWatchLogsGroup'] }}"
+      VPNSecGrpID: "{{ cfsecgrp['stack_outputs']['VPNInstanceSecurityGroupID'] }}"
+      VPNELBSecGrpID: "{{ cfsecgrp['stack_outputs']['VPNELBSecurityGroupID'] }}"
+      VPNEC2InstanceProfile: "{{ cfrlp['stack_outputs']['VPNEC2InstanceProfile'] }}"
+      VPNCloudWatchLogsGroup: "{{ cfrlp['stack_outputs']['VPNCloudWatchLogsGroup'] }}"
+      BastionSecGrpID: "{{ cfsecgrp['stack_outputs']['BastionInstanceSecurityGroupID'] }}"
+      BastionELBSecGrpID: "{{ cfsecgrp['stack_outputs']['BastionELBSecurityGroupID'] }}"
+      BastionEC2InstanceProfile: "{{ cfrlp['stack_outputs']['BastionEC2InstanceProfile'] }}"
+      BastionCloudWatchLogsGroup: "{{ cfrlp['stack_outputs']['BastionCloudWatchLogsGroup'] }}"
+      WAFInstanceType: "{{ waf_instance_type }}"
+      WAFUserData: "{{ lookup('file', 'user_data_waf.yml') | b64encode }}"
+      WAFRootVolSize: "10"
+      WAFRootVolType: gp2
+      NATInstanceType: "{{ nat_instance_type }}"
+      NATUserData: "{{ lookup('file', 'user_data_nat.yml') | b64encode }}"
+      NATRootVolSize: "10"
+      NATRootVolType: gp2
+      VPNInstanceType: "{{ vpn_instance_type }}"
+      VPNUserData: "{{ lookup('file', 'user_data_vpn.yml') | b64encode }}"
+      VPNRootVolSize: "10"
+      VPNRootVolType: gp2
+      BastionInstanceType: "{{ bastion_instance_type }}"
+      BastionUserData: "{{ lookup('file', 'user_data_bastion.yml') | b64encode }}"
+      BastionRootVolSize: "50"
+      BastionRootVolType: gp2
+      CiapHostingSubNet1ID: "{{ cfnet['stack_outputs']['CiapHostingSubNet1ID'] }}"
+      CiapHostingSubNet2ID: "{{ cfnet['stack_outputs']['CiapHostingSubNet2ID'] }}"
+      CiapBrowsingSubNet1ID: "{{ cfnet['stack_outputs']['CiapBrowsingSubNet1ID'] }}"
+      CiapBrowsingSubNet2ID: "{{ cfnet['stack_outputs']['CiapBrowsingSubNet2ID'] }}"
+      CiapVPNSubNet1ID: "{{ cfnet['stack_outputs']['CiapVPNSubNet1ID'] }}"
+      CiapVPNSubNet2ID: "{{ cfnet['stack_outputs']['CiapVPNSubNet2ID'] }}"
+      AdminSubNet1ID: "{{ cfnet['stack_outputs']['AdminSubNet1ID'] }}"
+      AdminSubNet2ID: "{{ cfnet['stack_outputs']['AdminSubNet2ID'] }}"
+      SquidPort: "{{ squid_port }}"
+      SquidDist: "{{ squid_dist }}"
+      VPCCiapID: "{{ cfnet['stack_outputs']['VPCCiapID'] }}"
+      S3BucketPrefix: "{{ s3_bucket_prefix | lower }}"
+    tags:
+      OpenInnovationLabStack: "{{ stack_name }}-netfunc"
+  when: create_infra == "yes"
+  register: cfnetfunc
+
+- name: Adding DNS entries for Network Functions
+  route53:
+    command: create
+    profile: "{{ aws_cli_installer_profile }}"
+    zone: "{{ item.zone }}"
+    private_zone: "{{ item.private_zone }}"
+    type: CNAME
+    record: "{{ item.record }}"
+    value: "{{ item.value }}"
+    ttl: 60
+    overwrite: yes
+    wait: "{{ item.wait }}"
+  with_items:
+    - zone: "{{ public_dns_domain }}"
+      private_zone: false
+      record: "www.{{ public_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['WAFDNSName'] }}"
+      wait: no
+    - zone: "{{ public_dns_domain }}"
+      private_zone: false
+      record: "vpn.{{ public_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['VPNDNSName'] }}"
+      wait: no
+    - zone: "{{ private_dns_domain }}"
+      private_zone: true
+      record: "bastion.{{ private_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['BastionDNSName'] }}"
+      wait: yes
+    - zone: "{{ private_dns_domain }}"
+      private_zone: true
+      record: "webproxy.{{ private_dns_domain }}"
+      value: "{{ cfnetfunc['stack_outputs']['SquidDNSName'] }}"
+      wait: yes
+
+- name: Create Project OCP brownfield resources
+  cloudformation:
+    stack_name: "{{ stack_name }}-project-ocp-inf"
+    state: "present"
+    region: "{{ region }}"
+    profile: "{{ aws_cli_installer_profile }}"
+    template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/project-ocp-infra.yaml"
+    template_parameters:
+      NumberOfAZs: "3"
+      #Route53HostedZone: "{{ dns_domain }}."
+      VPCProjectID: "{{ cfnet['stack_outputs']['VPCProjectID'] }}"
+      ProjectRouteTableID: "{{ cfnet['stack_outputs']['ProjectRouteTableID'] }}"
+      ProjectOCPPubSubNet1CIDR: "{{ project_subnet_ocp_pub1_cidr }}"
+      ProjectOCPPubSubNet2CIDR: "{{ project_subnet_ocp_pub2_cidr }}"
+      ProjectOCPPubSubNet3CIDR: "{{ project_subnet_ocp_pub3_cidr }}"
+      ProjectOCPPrivSubNet1CIDR: "{{ project_subnet_ocp_priv1_cidr }}"
+      ProjectOCPPrivSubNet2CIDR: "{{ project_subnet_ocp_priv2_cidr }}"
+      ProjectOCPPrivSubNet3CIDR: "{{ project_subnet_ocp_priv3_cidr }}"
+    tags:
+      OpenInnovationLabStack: "{{ stack_name }}-project-ocp"
+  when: create_infra == "yes"
+  register: cfprojectocp

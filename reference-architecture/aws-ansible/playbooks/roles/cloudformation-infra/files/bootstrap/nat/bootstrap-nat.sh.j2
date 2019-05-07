@@ -1,0 +1,81 @@
+#!/bin/bash
+#
+# Arguments
+# $1: Squid distribution to install: os or zip
+# $2: Squid port number
+# $3: CloudFormation stack name
+# $4: CloudWatch Logs log group
+# $5: S3 Bucket containing squid package
+#
+
+
+
+squiddist="$1"
+squidport="$2"
+stackname="$3"
+loggroup="$4"
+s3loc="$5"
+
+
+
+if [ -z "$squiddist" ] || [ -z "$squidport" ] || [ -z "$stackname" ] || [ -z "$loggroup" ] || [ -z "$s3loc" ]; then
+        echo "Missing arguments"
+        exit 1
+fi
+
+
+
+enable_web_proxy() {
+  FILE=$1
+  VAR="http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY"
+  for v in $VAR; do
+    echo "processing variable '$v'"
+    sed -i -re "s/^#(export ${v}.+$)/\1/" $FILE
+  done
+}
+
+
+
+disable_web_proxy() {
+  FILE=$1
+  VAR="http_proxy https_proxy no_proxy HTTP_PROXY HTTPS_PROXY NO_PROXY"
+  for v in $VAR; do
+    echo "processing variable '$v'"
+    if [ "x$v" != "x" ]; then
+      # unset from current running env
+      unset $v
+      # prevent defining it in child processes
+      sed -i -re "s/^(export ${v}.+$)/#\1/" $FILE
+    fi
+  done
+}
+
+
+
+# disable proxy, it's not installed yet...
+disable_web_proxy /etc/environment
+disable_web_proxy /etc/sysconfig/docker
+service docker restart
+
+
+
+#Replaced by docker image
+## fetch squid package
+#aws s3 cp s3://${s3loc}/bootstrap/nat/squidproxyfarm-setup.zip .
+#unzip ./squidproxyfarm-setup.zip
+#cd squidproxyfarm-setup
+#chmod +x ./squid-setup.sh
+#./squid-setup.sh ${squiddist} ${squidport} ${stackname} ${loggroup} 2>&1 | tee script.log
+
+cd /root
+git clone https://github.com/oip-prd/squid-alpine-ssl
+cd squid-alpine-ssl
+docker-compose build
+docker-compose up -d
+
+
+
+# enable proxy so all traffic from NAT instance is also logged
+enable_web_proxy /etc/environment
+enable_web_proxy /etc/sysconfig/docker
+service docker restart

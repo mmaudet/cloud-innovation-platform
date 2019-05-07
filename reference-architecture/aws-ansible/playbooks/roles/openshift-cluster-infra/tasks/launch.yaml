@@ -1,0 +1,629 @@
+---
+- name: Creating Installer IAM Role
+  iam:
+    iam_type: role
+    name: "{{stack_name}}-ocp-{{cluster_id}}-installer-role"
+    state: present
+    trust_policy:
+      Version: '2012-10-17'
+      Statement:
+      - Effect: Allow
+        Action: sts:AssumeRole
+        Principal:
+          AWS: arn:aws:iam::{{ root_account['account_id'] }}:user/{{ root_account['iam_user'] }}
+          Service: ec2.amazonaws.com
+  register: iam
+
+
+
+- name: Saving installer role ID
+  set_fact: installer_role_id="{{ iam['role_result']['role_id'] }}"
+
+
+
+- name: Creating rendered files directories
+  file:
+    path: roles/openshift-cluster-infra/files/rendered/{{ item }}
+    state: directory
+    mode: 0755
+  with_items:
+    - "{{stack_name}}-ocp-{{cluster_id}}"
+
+
+
+- name: Rendering Installer Role Policy Templates
+  template:
+    src: roles/openshift-cluster-infra/files/{{ item }}.json.j2
+    dest: roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}.json
+  with_items:
+    - role-policy-oip-installer
+
+
+
+- name: Attaching policies to Installer IAM Role
+  iam_policy:
+    iam_type: role
+    iam_name: "{{stack_name}}-ocp-{{cluster_id}}-installer-role"
+    profile: "{{ aws_cli_installer_profile }}"
+    policy_name: tobetuned
+    state: present
+    policy_json: "{{ lookup('file', 'rendered/' + stack_name + '-ocp-' + cluster_id + '/' + item + '.json') }}"
+  with_items:
+    - role-policy-oip-installer
+
+
+
+- name: Rendering Other Templates
+  template:
+    src: roles/openshift-cluster-infra/files/{{ item }}.j2
+    dest: roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}
+  with_items:
+    - security-groups.yaml
+    - s3-bucket-policy-data.json
+  
+
+
+- name: Creating S3 Buckets
+  s3_bucket:
+    name: "{{stack_name}}-ocp-{{cluster_id}}-{{item}}"
+    region: "{{ region }}"
+    state: present
+    profile: "{{ aws_cli_installer_profile }}"
+    policy: "{{ lookup('file', 'rendered/' + stack_name + '-ocp-' + cluster_id + '/s3-bucket-policy-' + item + '.json') }}"
+  with_items:
+    - "data"
+
+
+
+- name: Creating RDS Subnet Group
+  rds_subnet_group:
+    name: "{{stack_name}}-ocp-{{cluster_id}}-rds-grp"
+    region: "{{ region }}"
+    state: present
+    description: "{{stack_name}}-ocp-{{cluster_id}} RDS Subnet Group"
+    subnets:
+      - "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}"
+      - "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet2ID'] }}"
+      - "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet3ID'] }}"
+      - "{{ cfprojectocp['stack_outputs']['ProjectOCPPrivSubNet1ID'] }}"
+      - "{{ cfprojectocp['stack_outputs']['ProjectOCPPrivSubNet2ID'] }}"
+      - "{{ cfprojectocp['stack_outputs']['ProjectOCPPrivSubNet3ID'] }}"
+
+
+
+- name: OCP - Setting common cluster facts for dynamic tags
+  set_fact:
+    ocpnodedyntags:
+      - key: stack_name
+        val: "{{stack_name}}"
+      - key: oip_cluster_name
+        val: "{{stack_name}}-ocp-{{cluster_id}}"
+      - key: "kubernetes.io/cluster/{{stack_name}}-ocp-{{cluster_id}}"
+        val: "owned"
+
+
+
+- name: OCP - Setting common cluster tags
+  set_fact: 
+    ocpclustertags: "{{ ocpnodedyntags | get_attr('key', 'val') }}"
+
+
+
+- name: OCP - TEMP - Creating OCP security group
+  ec2_group:
+    name: "{{stack_name}}-ocp-{{cluster_id}}-SecGrp"
+    description: TEMP SecGrp for OCP
+    vpc_id: "{{ cfnet['stack_outputs']['VPCProjectID'] }}"
+    region: "{{ region }}"
+    rules:
+      - proto: all
+        from_port: 0
+        to_port: 65535
+        cidr_ip: 0.0.0.0/0
+    tags: "{{ { 'Name': stack_name + '-ocp-' + cluster_id + '-secgrp-prj-ocp-all' } | combine(ocpclustertags) }}"
+  register: tmpsgocp
+
+
+
+- name: OCP - Creating Master nodes
+  ec2:
+    region: "{{ region }}"
+    key_name: "{{ keypair }}"
+    group_id: "{{ tmpsgocp['group_id'] }}"
+    instance_type: "{{ ocp_vars['master_instance_type'] }}"
+    image: "{{ ocp_vars['ami_id'] }}"
+    volumes:
+    - device_name: /dev/sda1
+      volume_type: gp2
+      volume_size: 50
+    wait: yes
+    wait_timeout: 600
+    exact_count: 1
+    instance_tags: "{{ { 'Name': stack_name + '-ocp-' + cluster_id + '-' + item, 'role': 'ocp-master' } | combine(ocpclustertags) }}"
+    count_tag:
+       Name: "{{stack_name}}-ocp-{{cluster_id}}-{{item}}"
+    monitoring: yes
+    vpc_subnet_id: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}"
+    assign_public_ip: no
+  with_sequence: start=1 end={{ ocp_vars['master_instance_count'] }} format=master-%02x
+
+
+
+- name: OCP - Gathering Master nodes facts
+  ec2_instance_facts:
+    region: "{{ region }}"
+    filters:
+       "instance-state-name": "running"
+       "tag:stack_name": "{{stack_name}}"
+       "tag:role": "ocp-master"
+       "tag:oip_cluster_name": "{{stack_name}}-ocp-{{cluster_id}}"
+  register: ocpmasternodes
+
+
+
+- name: OCP - Expand Master nodes instance IDs
+  set_fact:
+    # Sets a list of mount directories
+    ocpmasternodesids: "\
+      {{ ocpmasternodesids | default([]) }} + \
+      [ '{{ item['instance_id'] }}' ]"
+  with_items: "{{ ocpmasternodes['instances'] }}"
+
+
+
+- name: OCP - Creating Infra nodes
+  ec2:
+    region: "{{ region }}"
+    key_name: "{{ keypair }}"
+    group_id: "{{ tmpsgocp['group_id'] }}"
+    instance_type: "{{ ocp_vars['infra_instance_type'] }}"
+    image: "{{ ocp_vars['ami_id'] }}"
+    volumes:
+    - device_name: /dev/sda1
+      volume_type: gp2
+      volume_size: 50
+    - device_name: /dev/xvdg
+      volume_type: gp2
+      volume_size: 300
+    wait: yes
+    wait_timeout: 600
+    exact_count: 1
+    instance_tags: "{{ { 'Name': stack_name + '-ocp-' + cluster_id + '-' + item, 'role': 'ocp-infra' } | combine(ocpclustertags) }}"
+    count_tag:
+       Name: "{{stack_name}}-ocp-{{cluster_id}}-{{item}}"
+    monitoring: yes
+    vpc_subnet_id: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}"
+    assign_public_ip: no
+  with_sequence: start=1 end={{ ocp_vars['infra_instance_count'] }} format=infra-%02x
+
+
+
+- name: OCP - Gathering Infra nodes facts
+  ec2_instance_facts:
+    region: "{{ region }}"
+    filters:
+       "instance-state-name": "running"
+       "tag:stack_name": "{{stack_name}}"
+       "tag:role": "ocp-infra"
+       "tag:oip_cluster_name": "{{stack_name}}-ocp-{{cluster_id}}"
+  register: ocpinfranodes
+
+
+
+- name: OCP - Expand Infra nodes instance IDs
+  set_fact:
+    # Sets a list of mount directories
+    ocpinfranodesids: "\
+      {{ ocpinfranodesids | default([]) }} + \
+      [ '{{ item['instance_id'] }}' ]"
+  with_items: "{{ ocpinfranodes['instances'] }}"
+
+
+
+- name: OCP - Creating Compute nodes
+  ec2:
+    region: "{{ region }}"
+    key_name: "{{ keypair }}"
+    group_id: "{{ tmpsgocp['group_id'] }}"
+    instance_type: "{{ ocp_vars['appnode_instance_type'] }}"
+    image: "{{ ocp_vars['ami_id'] }}"
+    volumes:
+    - device_name: /dev/sda1
+      volume_type: gp2
+      volume_size: 25
+    wait: yes
+    wait_timeout: 600
+    exact_count: 1
+    instance_tags: "{{ { 'Name': stack_name + '-ocp-' + cluster_id + '-' + item, 'role': 'ocp-compute' } | combine(ocpclustertags) }}"
+    count_tag:
+       Name: "{{stack_name}}-ocp-{{cluster_id}}-{{item}}"
+    monitoring: yes
+    vpc_subnet_id: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}"
+    assign_public_ip: no
+  with_sequence: start=1 end={{ ocp_vars['appnode_instance_count'] }} format=compute-%02x
+
+
+
+- name: OCP - Gathering Compute nodes facts
+  ec2_instance_facts:
+    region: "{{ region }}"
+    filters:
+       "instance-state-name": "running"
+       "tag:stack_name": "{{stack_name}}"
+       "tag:role": "ocp-compute"
+       "tag:oip_cluster_name": "{{stack_name}}-ocp-{{cluster_id}}"
+  register: ocpcomputenodes
+
+
+
+- name: OCP - Expand Compute nodes instance IDs
+  set_fact:
+    # Sets a list of mount directories
+    ocpcomputenodesids: "\
+      {{ ocpcomputenodesids | default([]) }} + \
+      [ '{{ item['instance_id'] }}' ]"
+  with_items: "{{ ocpcomputenodes['instances'] }}"
+
+
+
+- name: OCP - Rendering RHOCP Installer Templates
+  template:
+    src: roles/openshift-cluster-infra/files/{{ item }}.j2
+    dest: roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}
+  with_items:
+    - openshift-ansible-contrib-installer-userdata
+
+
+
+- name: TEMP - OCP - Creating GPU compute node with custom AMI
+  ec2:
+    region: "{{ region }}"
+    key_name: "{{ keypair }}"
+    group_id: "{{ tmpsgocp['group_id'] }}"
+    instance_type: "{{ ocp_vars['gpunode_instance_type'] }}"
+    image: "{{ ocp_vars['ami_id'] }}"
+    volumes:
+    - device_name: /dev/sda1
+      volume_type: gp2
+      volume_size: 150
+    wait: yes
+    wait_timeout: 600
+    exact_count: 1
+    instance_tags: "{{ { 'Name': stack_name + '-ocp-' + cluster_id + '-' + item, 'role': 'ocp-compute-gpu' } | combine(ocpclustertags) }}"
+    count_tag: 
+       Name: "{{stack_name}}-ocp-{{cluster_id}}-{{item}}"
+    monitoring: yes
+    vpc_subnet_id: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}"
+    assign_public_ip: no
+  with_sequence: start=1 end={{ ocp_vars['gpunode_instance_count'] }} format=compute-gpu-%02x
+  when: add_gpu_node is defined
+
+
+
+- name: OCP - Gathering GPU Compute nodes facts
+  ec2_instance_facts:
+    region: "{{ region }}"
+    filters:
+       "instance-state-name": "running"
+       "tag:stack_name": "{{stack_name}}"
+       "tag:role": "ocp-compute-gpu"
+       "tag:oip_cluster_name": "{{stack_name}}-ocp-{{cluster_id}}"
+  register: ocpcomputegpunodes
+  when: add_gpu_node is defined
+
+
+
+- name: OCP - Expand GPU Compute nodes instance IDs
+  set_fact:
+    # Sets a list of mount directories
+    ocpcomputegpunodesids: "\
+      {{ ocpcomputegpunodesids | default([]) }} + \
+      [ '{{ item['instance_id'] }}' ]"
+  with_items: "{{ ocpcomputegpunodes['instances'] }}"
+  when: add_gpu_node is defined
+
+
+- name: OCP - Creating bootstrap RHEL 7 instance
+  ec2:
+    region: "{{ region }}"
+    key_name: "{{ keypair }}"
+    group_id: "{{ cfsecgrp['stack_outputs']['BastionInstanceSecurityGroupID'] }}"
+    instance_type: "{{ ocp_vars['admin_instance_type'] }}"
+    image: "{{ ocp_vars['ami_id'] }}"
+    wait: yes
+    wait_timeout: 600
+    exact_count: 1
+    instance_tags:
+       stack_name: "{{stack_name}}"
+       Name: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+       role: "openshift-ansible-contrib-installer"
+    count_tag: 
+       Name: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+    monitoring: yes
+    user_data: "{{ lookup('file', 'rendered/{{stack_name}}-ocp-{{cluster_id}}/openshift-ansible-contrib-installer-userdata') }}"
+    vpc_subnet_id: "{{ cfnet['stack_outputs']['AdminSubNet1ID'] }}"
+    assign_public_ip: no
+
+- name: OCP - Gathering Admin node facts
+  ec2_instance_facts:
+    region: "{{ region }}"
+    filters:
+       "instance-state-name": "running"
+       "tag:Name": "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  register: ocpadminnode
+
+
+
+- name: Adding DNS entries for OCP admin node
+  route53:
+    command: create
+    profile: "{{ aws_cli_installer_profile }}"
+    zone: "{{ private_dns_domain }}"
+    private_zone: true
+    type: A
+    record: "{{ item.record }}"
+    value: "{{ (item.value|first).private_ip_address }}"
+    ttl: 60
+    overwrite: yes
+    wait: "{{ item.wait }}"
+  with_items:
+    - record: "{{stack_name}}-ocp-{{cluster_id}}-admin.{{ private_dns_domain }}"
+      value: "{{ ocpadminnode['instances'] }}"
+      wait: yes
+
+- name: OCP - Creating Master ELB security group
+  ec2_group:
+    name: "{{stack_name}}-ocp-{{cluster_id}}-secgrp-Project-MasterELB"
+    description: SecGrp for OCP Master nodes
+    vpc_id: "{{ cfnet['stack_outputs']['VPCProjectID'] }}"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        from_port: 443
+        to_port: 443
+        cidr_ip: 0.0.0.0/0
+  register: tmpsgocpelb
+
+- name: OCP - Creating Master service Load Balancer
+  ec2_elb_lb:
+    name: "{{stack_name}}-ocp-{{cluster_id}}-Master"
+    region: "{{ region }}"
+    scheme: internal
+    state: present
+    security_group_ids: "{{ tmpsgocpelb['group_id'] }}"
+    subnets: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}"
+    #subnets: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}, {{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet2ID'] }}"
+    instance_ids:
+      "{{ ocpmasternodesids }}"
+    listeners:
+      - protocol: tcp
+        load_balancer_port: 443
+        instance_port: 443
+    health_check:
+        ping_protocol: tcp # options are http, https, ssl, tcp
+        ping_port: 443
+        response_timeout: 5 # seconds
+        interval: 10 # seconds
+        unhealthy_threshold: 2
+        healthy_threshold: 2
+  register: ocpelbmaster
+
+
+
+- name: Adding DNS entries for OCP Master ELB
+  route53:
+    command: create
+    profile: "{{ aws_cli_installer_profile }}"
+    zone: "{{ private_dns_domain }}"
+    private_zone: true
+    type: CNAME
+    record: "{{ item.record }}"
+    value: "{{ item.value.dns_name }}"
+    ttl: 60
+    overwrite: yes
+    wait: "{{ item.wait }}"
+  with_items:
+    - record: "internal-openshift-master.{{cluster_id}}.{{ private_dns_domain }}"
+      value: "{{ ocpelbmaster.elb }}"
+      wait: yes
+
+
+
+- name: OCP - Creating Infra ELB security group
+  ec2_group:
+    name: "{{stack_name}}-ocp-{{cluster_id}}-secgrp-Project-OCP-InfraELB"
+    description: SecGrp for OCP Infra nodes
+    vpc_id: "{{ cfnet['stack_outputs']['VPCProjectID'] }}"
+    region: "{{ region }}"
+    rules:
+      - proto: tcp
+        from_port: 80
+        to_port: 80
+        cidr_ip: 0.0.0.0/0
+      - proto: tcp
+        from_port: 443
+        to_port: 443
+        cidr_ip: 0.0.0.0/0
+  register: tmpsgocpinfra
+
+
+
+- name: OCP - Creating Infra service Load Balancer
+  ec2_elb_lb:
+    name: "{{stack_name}}-ocp-{{cluster_id}}-p-OCP-Infra"
+    region: "{{ region }}"
+    scheme: internal
+    state: present
+    security_group_ids: "{{ tmpsgocpinfra['group_id'] }}"
+    subnets: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}"
+    #subnets: "{{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet1ID'] }}, {{ cfprojectocp['stack_outputs']['ProjectOCPPubSubNet2ID'] }}"
+    instance_ids:
+      "{{ ocpinfranodesids }}"
+    listeners:
+      - protocol: tcp
+        load_balancer_port: 80
+        instance_port: 80
+      - protocol: tcp
+        load_balancer_port: 443
+        instance_port: 443
+    health_check:
+        ping_protocol: tcp # options are http, https, ssl, tcp
+        ping_port: 443
+        response_timeout: 5 # seconds
+        interval: 10 # seconds
+        unhealthy_threshold: 2
+        healthy_threshold: 2
+  register: ocpelbinfra
+
+
+
+- name: Adding DNS entries for OCP Infra ELB
+  route53:
+    command: create
+    profile: "{{ aws_cli_installer_profile }}"
+    zone: "{{ private_dns_domain }}"
+    private_zone: true
+    type: CNAME
+    record: "{{ item.record }}"
+    value: "{{ item.value.dns_name }}"
+    ttl: 60
+    overwrite: yes
+    wait: "{{ item.wait }}"
+  with_items:
+    - record: "infra-elb.apps.{{cluster_id}}.{{ private_dns_domain }}"
+      value: "{{ ocpelbinfra.elb }}"
+      wait: yes
+
+
+
+##TODO: document how to prepare $HOME/.ssh/config file to reach admin node
+##TODO: fix ANSIBLE_HOST_KEY_CHECKING, it doesn't work as is
+#- name: OCP - Wait for SSH to come up
+#  environment:
+#    ANSIBLE_HOST_KEY_CHECKING: False
+#  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+#  wait_for:
+#    port: 22
+#    host: "{{ instancesout.instances[0].private_ip_address }}"
+#    timeout: 300
+#    search_regex: OpenSSH
+
+
+
+- name: OCP - Rendering OCP Ansible host template
+  template:
+    src: "roles/openshift-cluster-infra/files/{{ item }}.j2"
+    dest: "roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}"
+  with_items:
+    - openshift-ansible-hosts
+
+
+
+- name: OCP - Creating /etc/ansible on Admin node
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  become: true
+  file:
+    path: /etc/ansible
+    state: directory
+    mode: 0755
+
+
+
+- name: OCP - Copying OCP Ansible host template to Admin node
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  become: true
+  copy:
+    src: "roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}"
+    dest: "/etc/ansible/hosts"
+  with_items:
+    - openshift-ansible-hosts
+
+
+
+- name: OCP - Admin node - rendering default environment config file
+  template:
+    src: "roles/openshift-cluster-infra/files/{{ item }}.j2"
+    dest: "roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}"
+  with_items:
+    - environment
+    - cao_openshift_inventory
+    - cao_build-ami-provisioning-vars.yaml
+    - cao_setup_cluster.sh
+    - cao_user_data.txt
+    - ocp_install.sh
+
+
+
+- name: OCP - Admin node - copying default environment config file to admin node
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  become: true
+  copy:
+    src: "roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}"
+    dest: "/etc/{{ item }}"
+  with_items:
+    - environment
+
+
+
+- name: OCP - Creating /opt/oip on Admin node
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  become: true
+  file:
+    path: /opt/oip
+    state: directory
+    owner: root
+    group: wheel
+    mode: 0770
+
+
+
+- name: OCP - Admin node - other config files to admin node
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  become: true
+  copy:
+    src: "roles/openshift-cluster-infra/files/rendered/{{stack_name}}-ocp-{{cluster_id}}/{{ item }}"
+    dest: "/opt/oip/{{ item }}"
+  with_items:
+    - cao_openshift_inventory
+    - cao_build-ami-provisioning-vars.yaml
+    - cao_setup_cluster.sh
+    - cao_user_data.txt
+    - ocp_install.sh
+
+
+
+- name: OCP - Admin node - remove default repositories (and clean up left-over metadata)
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  yum_repository:
+    name: \*
+    state: absent
+  notify: yum-clean-metadata
+
+
+
+- name: OCP - Admin node - register node in RHSM
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  redhat_subscription:
+    state: present
+    username: "{{ocp_vars['rhsm_user']}}"
+    password: "{{ocp_vars['rhsm_password']}}"
+    server_proxy_hostname: "webproxy.{{private_dns_domain}}"
+    server_proxy_port: "{{squid_port}}"
+    auto_attach: true
+    pool_ids: "{{ ocp_vars['rhsm_openshift_pool_id'] }}"
+  when: ocp_vars['openshift_deployment_type'] == 'openshift-enterprise'
+
+
+
+- name: OCP - Admin node - enabling OpenShift repositories
+  delegate_to: "{{stack_name}}-ocp-{{cluster_id}}-admin"
+  yum_repository:
+    name: "{{item}}"
+    enabled: yes
+  with_items:
+    - rhel-7-server-rpms
+    - rhel-7-server-extras-rpms
+    - rhel-7-server-ose-3.11-rpms
+    - rhel-7-server-ansible-2.6-rpms
+  when: ocp_vars['openshift_deployment_type'] == 'openshift-enterprise'
+
