@@ -31,6 +31,8 @@ import sys
               show_default=True)
 @click.option('--tech-nb-subnets', default='2', help='Number of Tech subnets (1 per region)',
               show_default=True)
+@click.option('--project-nb-subnets', default='3', help='Number of private subnets for projects (1 per region)',
+              show_default=True)
 @click.option('--project-ocp-nb-subnets', default='3', help='Number of private subnets for OCP (1 per region)',
               show_default=True)
 @click.option('--keypair', help='EC2 keypair name',
@@ -123,6 +125,7 @@ def launch_oil_env(task=None,
                    ciap_nb_subnets=None,
                    admin_nb_subnets=None,
                    tech_nb_subnets=None,
+                   project_nb_subnets=None,
                    project_ocp_nb_subnets=None,
                    keypair=None,
                    create_key=None,
@@ -217,6 +220,7 @@ def launch_oil_env(task=None,
   ciap_nb_subnets = int(ciap_nb_subnets)
   admin_nb_subnets = int(admin_nb_subnets)
   tech_nb_subnets = int(tech_nb_subnets)
+  project_nb_subnets = int(project_nb_subnets)
   project_ocp_nb_subnets = int(project_ocp_nb_subnets)
 
   # Create ssh key pair in AWS if none is specified
@@ -255,6 +259,7 @@ def launch_oil_env(task=None,
   click.echo('\tciap_nb_subnets: %s' % ciap_nb_subnets)
   click.echo('\tadmin_nb_subnets: %s' % admin_nb_subnets)
   click.echo('\ttech_nb_subnets: %s' % tech_nb_subnets)
+  click.echo('\tproject_nb_subnets: %s' % project_nb_subnets)
   click.echo('\tproject_ocp_nb_subnets: %s' % project_ocp_nb_subnets)
   click.echo('\tkeypair: %s' % keypair)
   click.echo('\tcreate_key: %s' % create_key)
@@ -323,6 +328,7 @@ def launch_oil_env(task=None,
     ciap_nb_subnets=%s \
     admin_nb_subnets=%s \
     tech_nb_subnets=%s \
+    project_nb_subnets=%s \
     project_ocp_nb_subnets=%s \
     keypair=%s \
     create_key=%s \
@@ -363,6 +369,7 @@ def launch_oil_env(task=None,
 														int(ciap_nb_subnets),
 														int(admin_nb_subnets),
 														int(tech_nb_subnets),
+														int(project_nb_subnets),
 														int(project_ocp_nb_subnets),
 														keypair,
 														create_key,

@@ -14,6 +14,10 @@ Parameters:
     Default: true
     Description: Deploy NAT resources or not
     Type: String
+  DeployTPResources:
+    Default: true
+    Description: Deploy Transparent Proxy resources or not
+    Type: String
   DeployVPNResources:
     Default: true
     Description: Deploy VPN resources or not
@@ -58,6 +62,7 @@ Parameters:
 Conditions:
   WAFInstanceCondition: !Equals [!Ref DeployWAFResources, true]
   NATInstanceCondition: !Equals [!Ref DeployNATResources, true]
+  TPInstanceCondition: !Equals [!Ref DeployTPResources, true]
   VPNInstanceCondition: !Equals [!Ref DeployVPNResources, true]
   BastionInstanceCondition: !Equals [!Ref DeployVPNResources, true]
 
@@ -401,6 +406,55 @@ Resources:
 
   ### VPC Project
 
+  TPInstanceSecurityGroup:
+    Condition: TPInstanceCondition
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enables outbound internet access for the VPC via the upstream NAT instances
+      VpcId: !Ref VPCProjectID
+      SecurityGroupEgress:
+      - CidrIp: !Ref VPCAdminCIDR
+        FromPort: '-1'
+        IpProtocol: '-1'
+        ToPort: '-1'
+      - CidrIp: !Ref VPCCiapCIDR
+        FromPort: '-1'
+        IpProtocol: '-1'
+        ToPort: '-1'
+      - CidrIp: !Ref VPCProjectCIDR
+        FromPort: '-1'
+        IpProtocol: '-1'
+        ToPort: '-1'
+      - CidrIp: !Ref VPCTechCIDR
+        FromPort: '-1'
+        IpProtocol: '-1'
+        ToPort: '-1'
+      - CidrIp: 169.254.169.254/32
+        FromPort: '-1'
+        IpProtocol: '-1'
+        ToPort: '-1'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: !Ref 'SquidPort'
+        ToPort: !Ref 'SquidPort'
+        CidrIp: !Ref VPCProjectCIDR
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'Project-TPInstance']]
+
+
 
 Outputs:
   WAFInstanceSecurityGroupID:
@@ -413,6 +467,11 @@ Outputs:
     Description: NAT Instance Security Group ID
     Export:
       Name: !Sub ${AWS::StackName}-NATInstanceSecurityGroupID
+  TPInstanceSecurityGroupID:
+    Value: !Ref TPInstanceSecurityGroup
+    Description: Transparent Proxy Instance Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-TPInstanceSecurityGroupID
   WAFELBSecurityGroupID:
     Value: !Ref WAFELBSecurityGroup
     Description: WAF ELB Security Group ID

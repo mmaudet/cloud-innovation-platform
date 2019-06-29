@@ -89,6 +89,14 @@ Parameters:
     Default: 10.0.128.0/17
     Description: CIDR block for the Project VPC
     Type: String
+{% for idx in range(1, project_nb_subnets|int + 1) %}
+  ProjectSubNet{{ idx }}CIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.{{ 250 + ( idx - 1 ) }}.0/24
+    Description: CIDR block for Project default subnet {{ idx }} located in Availability Zone {{ idx }}
+    Type: String
+{% endfor %}
   S3BucketPrefix:
     Description: S3 Bucket Prefix
     Type: String
@@ -413,13 +421,13 @@ Resources:
         Statement:
         - Sid: Allow access only to current stack buckets
           Principal: '*'
-          Action: 
+          Action:
             - 's3:CreateBucket'
             - 's3:List*'
             - 's3:Get*'
             - 's3:Put*'
           Effect: Allow
-          Resource: 
+          Resource:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
@@ -523,13 +531,13 @@ Resources:
         Statement:
         - Sid: Allow access only to current stack buckets
           Principal: '*'
-          Action: 
+          Action:
             - 's3:CreateBucket'
             - 's3:List*'
             - 's3:Get*'
             - 's3:Put*'
           Effect: Allow
-          Resource: 
+          Resource:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
@@ -574,12 +582,42 @@ Resources:
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Project-RouteTable']]
       - Key: Network
         Value: Project
-  ProjectRoute2Ciap:
+{% for idx in range(1, project_nb_subnets|int + 1) %}
+  ProjectSubNet{{ idx }}:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'VPCProject'
+      CidrBlock: !Ref 'ProjectSubNet{{ idx }}CIDR'
+      AvailabilityZone:
+        Fn::Select:
+          - {{ idx - 1 }}
+          - Fn::GetAZs: ""
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'Project-subnet-{{ idx }}']]
+      - Key: Network
+        Value: Project
+      - Key: kubernetes.io/cluster/{{stack_name}}
+        Value: owned
+  ProjectSubNet{{ idx }}RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref 'ProjectSubNet{{ idx }}'
+      RouteTableId: !Ref 'ProjectRouteTable'
+{% endfor %}
+  ProjectRoute2Default:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2ProjectPeeringConnection
     Properties:
       RouteTableId: !Ref 'ProjectRouteTable'
       DestinationCidrBlock: 0.0.0.0/0
+      VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
+  ProjectRoute2Ciap:
+    Type: AWS::EC2::Route
+    DependsOn: VPCCiap2ProjectPeeringConnection
+    Properties:
+      RouteTableId: !Ref 'ProjectRouteTable'
+      DestinationCidrBlock: !Ref VPCCiapCIDR
       VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
   ProjectRoute2Admin:
     Type: AWS::EC2::Route
@@ -603,13 +641,13 @@ Resources:
         Statement:
         - Sid: Allow access only to current stack buckets
           Principal: '*'
-          Action: 
+          Action:
             - 's3:CreateBucket'
             - 's3:List*'
             - 's3:Get*'
             - 's3:Put*'
           Effect: Allow
-          Resource: 
+          Resource:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
@@ -625,25 +663,25 @@ Resources:
   ### Public zones are created by Ansible because they may need to persist when stack is deleted...
   DNSPrivateZone:
     Type: "AWS::Route53::HostedZone"
-    Properties: 
-      HostedZoneConfig: 
+    Properties:
+      HostedZoneConfig:
         Comment: !Join ['', ['Private DNS Domain Name for stack ', !Ref 'AWS::StackName']]
       Name: !Ref PrivateDNSDomain
-      VPCs: 
-        - 
+      VPCs:
+        -
           VPCId: !Ref 'VPCCiap'
           VPCRegion: !Ref 'AWS::Region'
-        - 
+        -
           VPCId: !Ref 'VPCAdmin'
           VPCRegion: !Ref 'AWS::Region'
-        - 
+        -
           VPCId: !Ref 'VPCTech'
           VPCRegion: !Ref 'AWS::Region'
-        - 
+        -
           VPCId: !Ref 'VPCProject'
           VPCRegion: !Ref 'AWS::Region'
-      HostedZoneTags: 
-        - 
+      HostedZoneTags:
+        -
           Key: "DomainName"
           Value: !Ref PrivateDNSDomain
 
@@ -766,6 +804,18 @@ Outputs:
     Description: Project route table
     Export:
       Name: !Sub '${AWS::StackName}-ProjectRouteTable'
+{% for idx in range(1, project_nb_subnets|int + 1) %}
+  ProjectSubNet{{ idx }}CIDR:
+    Description: Project default ID in Availability Zone {{ idx }}
+    Value: !Ref 'ProjectSubNet{{ idx }}CIDR'
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectSubNet{{ idx }}CIDR'
+  ProjectSubNet{{ idx }}ID:
+    Description: Project default SubNet ID in Availability Zone {{ idx }}
+    Value: !Ref 'ProjectSubNet{{ idx }}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ProjectSubNet{{ idx }}ID'
+{% endfor %}
   VPCCiapS3VPCEndpointID:
     Value: !Ref 'VPCCiapS3VPCEndpoint'
     Description: CIAP VPC Endpoint for S3

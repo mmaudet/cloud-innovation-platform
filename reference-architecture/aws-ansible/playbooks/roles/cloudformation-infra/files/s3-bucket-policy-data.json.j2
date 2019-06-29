@@ -75,6 +75,26 @@
        }
      },
      {
+       "Sid": "Allow-access-from-TP-instances",
+       "Effect": "Allow",
+       "Principal": "*",
+       "Action": [
+                   "s3:Get*",
+                   "s3:List*"
+                 ],
+       "Resource": [
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/tp/*"
+                   ],
+       "Condition": {
+         "StringLike": {
+           "aws:userId": "{{ roleid_TPEC2Role['iam_roles'][0]['role_id'] }}:*"
+         }
+       }
+     },
+     {
        "Sid": "Allow-access-from-VPN-instances",
        "Effect": "Allow",
        "Principal": "*",

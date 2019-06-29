@@ -28,14 +28,14 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AdministratorAccess"  
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
       RoleName: "GRP-GTS-COE-ADMIN"
   #Role OS Administrator
   GRPGTSOSADM:
@@ -46,7 +46,7 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
@@ -65,16 +65,16 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/ReadOnlyAccess"  
+        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
       Policies:
-        - 
+        -
           PolicyName: "ATM-GTS-COE-INVENTORY"
           PolicyDocument:
             Version: "2012-10-17"
@@ -83,10 +83,10 @@ Resources:
                 Effect: "Allow"
                 Action: "ec2:DescribeTags"
                 Resource: "*"
-              - 
+              -
                 Effect: "Allow"
                 Action: "cloudwatch:GetMetricStatistics"
-                Resource: "*" 
+                Resource: "*"
       RoleName: "ATM-GTS-COE-INVENTORY"
   #Role DB Administrator
   GRPGTSDBADM:
@@ -97,7 +97,7 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
@@ -116,7 +116,7 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
@@ -135,7 +135,7 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
@@ -153,14 +153,14 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AdministratorAccess"  
+        - "arn:aws:iam::aws:policy/AdministratorAccess"
       RoleName: "GRP-GTS-COE-SEC-ADMIN"
   #Role Security Auditors
   GRPGTSCOESECAUDIT:
@@ -171,14 +171,14 @@ Resources:
         Statement:
           -
             Effect: "Allow"
-            Principal: 
+            Principal:
               AWS:
                 - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/SecurityAudit"  
+        - "arn:aws:iam::aws:policy/SecurityAudit"
       RoleName: "GRP-GTS-COE-SEC-AUDIT"
   #COEOSADMIN Policy
   COEOSADMIN:
@@ -723,6 +723,93 @@ Resources:
 
   ### END NAT instance / Squid proxy
 
+  ### BEGIN TP instance / Squid proxy
+
+  TPEC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+      - !Ref 'TPEC2Role'
+      Path: /
+
+  TPEC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: /
+      Policies:
+      - PolicyName: CloudWatch-PutMetricData
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - cloudwatch:PutMetricData
+            Resource: '*'
+      - PolicyName: CloudWatch-Logs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - logs:PutLogEvents
+            - logs:CreateLogStream
+            - logs:DescribeLogStreams
+            - logs:CreateLogGroup
+            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+                ':log-group:', !Ref 'TPCloudWatchLogsGroup', ':log-stream:*']]
+      - PolicyName: S3-Buckets-Access
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:Get*
+            - s3:List*
+            Resource:
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/bootstrap/tp/*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/tp/*']]
+      - PolicyName: EC2-ListAndModifyInstances
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:DescribeInstances
+            - ec2:DescribeRouteTables
+            - ec2:ModifyInstanceAttribute
+            Resource: '*'
+      - PolicyName: EC2-CreateRoute
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - ec2:CreateRoute
+            - ec2:ReplaceRoute
+            Resource:
+            - "arn:aws:ec2:{{region}}:{{root_account['account_id']}}:route-table/*"
+            Condition:
+              StringEquals:
+                'ec2:vpc' : "arn:aws:ec2:{{region}}:{{root_account['account_id']}}:vpc/{{ cfnet['stack_outputs']['VPCProjectID'] }}"
+
+  TPCloudWatchLogsGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: '14'
+
+  ### END TP instance / Squid proxy
+
   ### BEGIN VPN Instances
 
   VPNEC2InstanceProfile:
@@ -889,10 +976,30 @@ Outputs:
     Export:
       Name: !Sub ${AWS::StackName}-NATEC2InstanceProfile
   NATCloudWatchLogsGroup:
-    Description: CloudWatch Logs Group for WAF Instances
+    Description: CloudWatch Logs Group for NAT Instances
     Value: !Ref NATCloudWatchLogsGroup
     Export:
       Name: !Sub ${AWS::StackName}-NATCloudWatchLogsGroup
+  TPEC2Role:
+    Description: Role for TP Instances
+    Value: !Ref TPEC2Role
+    Export:
+      Name: !Sub ${AWS::StackName}-TPEC2Role
+  TPEC2RoleID:
+    Description: RoleId of TP Instances Role
+    Value: !GetAtt [TPEC2Role, Arn]
+    Export:
+      Name: !Sub ${AWS::StackName}-TPEC2RoleID
+  TPEC2InstanceProfile:
+    Description: Instance Profile for TP Instances
+    Value: !Ref TPEC2InstanceProfile
+    Export:
+      Name: !Sub ${AWS::StackName}-TPEC2InstanceProfile
+  TPCloudWatchLogsGroup:
+    Description: CloudWatch Logs Group for TP Instances
+    Value: !Ref TPCloudWatchLogsGroup
+    Export:
+      Name: !Sub ${AWS::StackName}-TPCloudWatchLogsGroup
   VPNEC2Role:
     Description: Role for VPN Instances
     Value: !Ref VPNEC2Role
@@ -938,4 +1045,3 @@ Outputs:
     Value: !Ref BastionCloudWatchLogsGroup
     Export:
       Name: !Sub ${AWS::StackName}-BastionCloudWatchLogsGroup
-

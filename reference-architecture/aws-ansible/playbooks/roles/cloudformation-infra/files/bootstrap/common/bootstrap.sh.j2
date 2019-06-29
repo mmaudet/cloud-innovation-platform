@@ -4,7 +4,7 @@
 # $1: CloudFormation stack name
 # $2: CloudWatch Logs log group
 # $3: S3 Bucket location
-# 
+#
 
 stackname="$1"
 loggroup="$2"
@@ -60,6 +60,8 @@ case $NETFUNC in
 		HNPREF=waf;;
 	"nat")
 		HNPREF=nat;;
+	"tp")
+		HNPREF=tp;;
 	"vpn")
 		HNPREF=vpn;;
 	"bastion")
