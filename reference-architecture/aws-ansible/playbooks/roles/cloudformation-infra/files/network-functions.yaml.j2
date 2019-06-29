@@ -5,6 +5,7 @@ Description: >
     WAF: CIAP - Hosting - Web Application Firewall instances
     NAT: CIAP - Browsing - Web Browsing NAT instances
     VPN: CIAP - VPN Concentrators - remote ssh/rdp access to Admin VPC
+    TP: Project - Transparent HTTP/HTTPS internet proxy
 
   **WARNING** This template creates AWS resources. You will be billed for the AWS
   resources used if you create a stack from this template. QS(0027)
@@ -233,6 +234,11 @@ Parameters:
     Description: Admin subnet ID
     Type: String
 {% endfor %}
+{% for idx in range(1, project_nb_subnets|int + 1) %}
+  ProjectSubNet{{ idx }}ID:
+    Description: Project default subnet ID
+    Type: String
+{% endfor %}
   WAFUserData:
     Description: WAF instances user data
     Type: String
@@ -294,6 +300,10 @@ Parameters:
     Default: true
     Description: Deploy NAT resources or not
     Type: String
+  DeployTPResources:
+    Default: true
+    Description: Deploy TP resources or not
+    Type: String
   DeployVPNResources:
     Default: true
     Description: Deploy VPN resources or not
@@ -314,10 +324,11 @@ Parameters:
     Default: 3130
     Description: Network port the Squid Instances will be listening to in transparent mode for HTTPS traffic
     Type: String
-  SquidDist:
-    Default: zip
-    Description: Squid distribution to use from 'zip' or 'os'
-    Type: String
+# Reached max parameters, need to remove this one
+#  SquidDist:
+#    Default: zip
+#    Description: Squid distribution to use from 'zip' or 'os'
+#    Type: String
   VPNPort:
     Default: 22
     Description: Network port the VPN Instances will be listening to
@@ -338,12 +349,13 @@ Parameters:
     Type: String
     Description: Enter the S3 Bucket name used to store logs in the form of
       bucket-name/prefix [or bucket-name in the case of root folder]
-  SquidProxyProtocol:
-    Type: String
-    Description: Does the Squid version supports Proxy Protocol. Requires Squid
-      version >3.5
-    AllowedValues: [true, false]
-    Default: true
+# Reached max parameters, need to remove this one
+#  SquidProxyProtocol:
+#    Type: String
+#    Description: Does the Squid version supports Proxy Protocol. Requires Squid
+#      version >3.5
+#    AllowedValues: [true, false]
+#    Default: true
 
 
 
@@ -353,6 +365,7 @@ Mappings:
     eu-west-1:
       AWSWAFHVM: {{ netfunc_vars['AWSWAFHVM'] }}
       AWSNATHVM: {{ netfunc_vars['AWSNATHVM'] }}
+      AWSTPHVM: {{ netfunc_vars['AWSTPHVM'] }}
       AWSVPNHVM: {{ netfunc_vars['AWSVPNHVM'] }}
       AWSBastionHVM: {{ netfunc_vars['AWSBastionHVM'] }}
 
@@ -364,6 +377,7 @@ Conditions:
   4AZCondition: !Equals [!Ref NumberOfAZs, 4]
   WAFInstanceCondition: !Equals [!Ref DeployWAFResources, true]
   NATInstanceCondition: !Equals [!Ref DeployNATResources, true]
+  TPInstanceCondition: !Equals [!Ref DeployTPResources, true]
   VPNInstanceCondition: !Equals [!Ref DeployVPNResources, true]
   BastionInstanceCondition: !Equals [!Ref DeployVPNResources, true]
   WAFInstance&1AZCondition: !And [{Condition: WAFInstanceCondition}, {Condition: 1AZCondition}]
@@ -374,6 +388,10 @@ Conditions:
   NATInstance&2AZCondition: !And [{Condition: NATInstanceCondition}, {Condition: 2AZCondition}]
   NATInstance&3AZCondition: !And [{Condition: NATInstanceCondition}, {Condition: 3AZCondition}]
   NATInstance&4AZCondition: !And [{Condition: NATInstanceCondition}, {Condition: 4AZCondition}]
+  TPInstance&1AZCondition: !And [{Condition: TPInstanceCondition}, {Condition: 1AZCondition}]
+  TPInstance&2AZCondition: !And [{Condition: TPInstanceCondition}, {Condition: 2AZCondition}]
+  TPInstance&3AZCondition: !And [{Condition: TPInstanceCondition}, {Condition: 3AZCondition}]
+  TPInstance&4AZCondition: !And [{Condition: TPInstanceCondition}, {Condition: 4AZCondition}]
   VPNInstance&1AZCondition: !And [{Condition: VPNInstanceCondition}, {Condition: 1AZCondition}]
   VPNInstance&2AZCondition: !And [{Condition: VPNInstanceCondition}, {Condition: 2AZCondition}]
   VPNInstance&3AZCondition: !And [{Condition: VPNInstanceCondition}, {Condition: 3AZCondition}]
@@ -383,7 +401,8 @@ Conditions:
   BastionInstance&3AZCondition: !And [{Condition: BastionInstanceCondition}, {Condition: 3AZCondition}]
   BastionInstance&4AZCondition: !And [{Condition: BastionInstanceCondition}, {Condition: 4AZCondition}]
   NVirginiaRegionCondition: !Equals [!Ref 'AWS::Region', us-east-1]
-  SupportProxyProtocol: !Equals [!Ref 'SquidProxyProtocol', true]
+#  SupportProxyProtocol: !Equals [!Ref 'SquidProxyProtocol', true]
+  SupportProxyProtocol: !Equals [true, true]
   S3VPCEndpointCondition: !Not [!Or [
         !Equals [!Ref 'AWS::Region', us-gov-west-1], !Equals [!Ref 'AWS::Region',
           cn-north-1]]]
@@ -461,7 +480,7 @@ Resources:
           NFSCRIPT="bootstrap-${!NETFUNC}.sh"
           #aws s3 cp s3://${S3Location}/bootstrap/$NETFUNC/$NFSCRIPT ./
           #chmod +x ./$NFSCRIPT
-          #./$NFSCRIPT ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location } 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
+          #./$NFSCRIPT ${AWS::StackName} ${WAFCloudWatchLogsGroup} ${S3Location } 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
 
           aws s3 cp --recursive s3://${S3Location}/bootstrap/waf/etc/ /etc/
           docker run -d  \
@@ -629,7 +648,7 @@ Resources:
           NFSCRIPT="bootstrap-${!NETFUNC}.sh"
           aws s3 cp s3://${S3Location}/bootstrap/$NETFUNC/$NFSCRIPT ./
           chmod +x ./$NFSCRIPT
-          ./$NFSCRIPT ${SquidDist} ${SquidPort} ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location } 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
+          ./$NFSCRIPT zip ${SquidPort} ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location } 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
           echo "MY-CLOUD-INIT-SCRIPT: Done!"
 
   NATElasticLoadBalancer:
@@ -1041,6 +1060,247 @@ Resources:
 
   ### VPC Project
 
+  ### BEGIN Transparent proxy
+  # Using some NAT* variables since we reached the maximum number of
+  # CloudFormation parameters (60 as of writing)
+  TPAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref 'TPAutoScalingLaunchConfiguration'
+      #TargetGroupARNs:
+      #- !Ref TPELBTargetGroup80
+      #- !Ref TPELBTargetGroup443
+      #- !Ref TPELBTargetGroup3128
+      DesiredCapacity: '1'
+      MinSize: '1'
+      MaxSize: '10'
+      VPCZoneIdentifier:
+{% for idx in range(1, project_ocp_nb_subnets|int + 1) %}
+      - !Ref 'ProjectSubNet{{ idx }}ID'
+{% endfor %}
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: '300'
+      Tags:
+      - PropagateAtLaunch: true
+        Key: "Name"
+        Value: "{{ stack_name }}-project-tpinstance"
+      - PropagateAtLaunch: true
+        Key: "Function"
+        Value: "TP"
+
+  TPAutoScalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile:
+        Fn::ImportValue:
+          !Sub "{{ stack_name }}-rlp-TPEC2InstanceProfile"
+
+      AssociatePublicIpAddress: false
+      # Using NAT instance type
+      InstanceType: !Ref NATInstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+      - Fn::ImportValue:
+          !Sub "{{ stack_name }}-secgrp-TPInstanceSecurityGroupID"
+      ImageId: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', 'AWSTPHVM']
+      InstanceMonitoring: false
+      UserData:
+        Fn::Base64: !Sub
+          - |
+            #!/bin/bash
+            echo "MY-CLOUD-INIT-SCRIPT: Start"
+            export NETFUNC=tp
+            export TPCloudWatchLogsGroup="${TPCloudWatchLogsGroup}"
+
+            # Make sure we have internet access thru upstream proxy
+            export http_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+            export HTTP_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+            export https_proxy=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+            export HTTPS_PROXY=http://webproxy.{{private_dns_domain}}:{{squid_port}}
+            export no_proxy="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+            export NO_PROXY="localhost,127.0.0.0/8,169.254.169.254,*.{{private_dns_domain}},*.s3.amazonaws.com"
+
+            CMD='curl -sL -w "%{http_code}" "https://s3.eu-west-1.amazonaws.com/" -o /dev/null --retry 5 --max-time 3'
+            while [ "$(eval $CMD)" != "200" ]; do
+              echo "MY-CLOUD-INIT-SCRIPT: Unable to access upstream proxy, sleeping 5 seconds"
+              sleep 5
+            done
+
+            cd /root
+
+            # Common bootstrap
+            echo "MY-CLOUD-INIT-SCRIPT: Fetching common bootstrap script"
+            aws s3 cp s3://${S3Location}/bootstrap/common/bootstrap.sh ./
+            chmod +x ./bootstrap.sh
+            echo "MY-CLOUD-INIT-SCRIPT: Launching common bootstrap script"
+            ./bootstrap.sh ${AWS::StackName} $TPCloudWatchLogsGroup ${S3Location} 2>&1 | tee /var/log/oil-bootstrap
+
+            # Function-specific bootstrap
+            echo "MY-CLOUD-INIT-SCRIPT: Fetching '$NETFUNC-specific' bootstrap script & launching it"
+            NFSCRIPT="bootstrap-${!NETFUNC}.sh"
+            aws s3 cp s3://${S3Location}/bootstrap/$NETFUNC/$NFSCRIPT ./
+            chmod +x ./$NFSCRIPT
+            ./$NFSCRIPT ${AWS::StackName} $TPCloudWatchLogsGroup ${S3Location} 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
+            echo "MY-CLOUD-INIT-SCRIPT: Done!"
+          - TPCloudWatchLogsGroup:
+              Fn::ImportValue:
+                !Sub "{{ stack_name }}-rlp-TPCloudWatchLogsGroup"
+
+
+#  TPElasticLoadBalancer:
+#    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+#    Properties:
+#      Type: network
+#      IpAddressType: ipv4
+#      LoadBalancerAttributes:
+#        - Key: access_logs.s3.enabled
+#          Value: True
+#        - Key: access_logs.s3.bucket
+#          Value: !Ref S3LogsLocation
+#        - Key: access_logs.s3.prefix
+#          Value: ''
+#        - Key: deletion_protection.enabled
+#          Value: False
+#        - Key: load_balancing.cross_zone.enabled
+#          Value: True
+#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PROJECT-TPELB']]
+#      Scheme: internal
+#      Subnets:
+#{% for idx in range(1, project_nb_subnets|int + 1) %}
+#        - !Ref 'ProjectSubNet{{ idx }}ID'
+#{% endfor %}
+#      Tags:
+#        - Key: StackName
+#          Value: !Ref 'AWS::StackName'
+#
+#  TPELBTargetGroup80:
+#    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+#    Properties:
+#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PRJ-TPELBTG80']]
+#      Port: 80
+#      Protocol: TCP
+#      VpcId:
+#        Fn::ImportValue:
+#          !Sub "{{ stack_name }}-net-VPCProjectID"
+#      TargetGroupAttributes:
+#        - Key: deregistration_delay.timeout_seconds
+#          Value: 60
+#      Tags:
+#        - Key: StackName
+#          Value: !Ref 'AWS::StackName'
+#  TPELBTargetGroup443:
+#    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+#    Properties:
+#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PRJ-TPELBTG443']]
+#      Port: 443
+#      Protocol: TCP
+#      VpcId:
+#        Fn::ImportValue:
+#          !Sub "{{ stack_name }}-net-VPCProjectID"
+#      TargetGroupAttributes:
+#        - Key: deregistration_delay.timeout_seconds
+#          Value: 60
+#      Tags:
+#        - Key: StackName
+#          Value: !Ref 'AWS::StackName'
+#  TPELBTargetGroup3128:
+#    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+#    Properties:
+#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PRJ-TPELBTG3128']]
+#      Port: 3128
+#      Protocol: TCP
+#      VpcId:
+#        Fn::ImportValue:
+#          !Sub "{{ stack_name }}-net-VPCProjectID"
+#      TargetGroupAttributes:
+#        - Key: deregistration_delay.timeout_seconds
+#          Value: 60
+#      Tags:
+#        - Key: StackName
+#          Value: !Ref 'AWS::StackName'
+#
+#  TPELBListener80:
+#    Type: AWS::ElasticLoadBalancingV2::Listener
+#    Properties:
+#      DefaultActions:
+#      - Type: forward
+#        TargetGroupArn: !Ref TPELBTargetGroup80
+#      LoadBalancerArn: !Ref TPElasticLoadBalancer
+#      Port: '80'
+#      Protocol: TCP
+#  TPELBListener443:
+#    Type: AWS::ElasticLoadBalancingV2::Listener
+#    Properties:
+#      DefaultActions:
+#      - Type: forward
+#        TargetGroupArn: !Ref TPELBTargetGroup443
+#      LoadBalancerArn: !Ref TPElasticLoadBalancer
+#      Port: '443'
+#      Protocol: TCP
+#  TPELBListener3128:
+#    Type: AWS::ElasticLoadBalancingV2::Listener
+#    Properties:
+#      DefaultActions:
+#      - Type: forward
+#        TargetGroupArn: !Ref TPELBTargetGroup3128
+#      LoadBalancerArn: !Ref TPElasticLoadBalancer
+#      Port: '3128'
+#      Protocol: TCP
+#
+  TPScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'TPAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '1'
+
+  TPScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'TPAutoScalingGroup'
+      Cooldown: '300'
+      ScalingAdjustment: '-1'
+
+  TPAlarmScaleOutPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale out if average Squid traffic > 5000 KB/s for 5 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '1'
+      Threshold: '5000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+      - !Ref 'TPScaleOutPolicy'
+
+  TPAlarmScaleInPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale in if average Squid traffic < 2000 KB/s for 15 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: '300'
+      EvaluationPeriods: '3'
+      Threshold: '2000'
+      Dimensions:
+      - Name: StackName
+        Value: !Ref 'AWS::StackName'
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+      - !Ref 'TPScaleInPolicy'
+
+
+  ### END Transparent proxy
+
+
 Outputs:
   BastionELBName:
     Description: Name of Bastion instance ELB
@@ -1054,6 +1314,12 @@ Outputs:
   WAFDNSName:
     Description: DNS Name of WAF proxy ELB
     Value: !GetAtt [WAFElasticLoadBalancer, DNSName]
+#  TPELBName:
+#    Description: Name of Transparent proxy ELB
+#    Value: !Ref 'TPElasticLoadBalancer'
+#  TPDNSName:
+#    Description: DNS Name of Transparent proxy ELB
+#    Value: !GetAtt [TPElasticLoadBalancer, DNSName]
   SquidELBName:
     Description: Name of Squid proxy ELB
     Value: !Ref 'NATElasticLoadBalancer'
@@ -1069,4 +1335,3 @@ Outputs:
   VPNDNSName:
     Description: DNS Name of VPN Concentrator ELB
     Value: !GetAtt [VPNElasticLoadBalancer, DNSName]
-

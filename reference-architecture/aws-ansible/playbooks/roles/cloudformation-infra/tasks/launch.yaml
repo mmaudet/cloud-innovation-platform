@@ -63,7 +63,6 @@
     - security-groups.yaml
     - network-functions.yaml
     - project-ocp-infra.yaml
-    - roles-logs-profiles.yaml
     - bootstrap/waf/etc/nginx/conf.d/virtual-ocp.conf
   when: create_infra == "yes"
 
@@ -97,7 +96,15 @@
   when: create_infra == "yes"
   register: cfnet
 
-- name: Create Roles, Instance Profiles and CloudWatch-Logs 
+- name: Rendering Roles, Logs and Profiles Templates
+  template:
+    src: roles/cloudformation-infra/files/{{ item }}.j2
+    dest: roles/cloudformation-infra/files/rendered/{{ stack_name }}/{{ item }}
+  with_items:
+    - roles-logs-profiles.yaml
+  when: create_infra == "yes"
+
+- name: Create Roles, Instance Profiles and CloudWatch-Logs
   cloudformation:
     stack_name: "{{ stack_name }}-rlp"
     state: "present"
@@ -121,6 +128,11 @@
 - name: Saving NATEC2Role instance role_id
   iam_role_facts: name="{{ cfrlp['stack_outputs']['NATEC2Role'] }}"
   register: roleid_NATEC2Role
+  when: create_infra == "yes"
+
+- name: Saving TPEC2Role instance role_id
+  iam_role_facts: name="{{ cfrlp['stack_outputs']['TPEC2Role'] }}"
+  register: roleid_TPEC2Role
   when: create_infra == "yes"
 
 - name: Saving VPNEC2Role instance role_id
@@ -249,8 +261,12 @@
       CiapVPNSubNet2ID: "{{ cfnet['stack_outputs']['CiapVPNSubNet2ID'] }}"
       AdminSubNet1ID: "{{ cfnet['stack_outputs']['AdminSubNet1ID'] }}"
       AdminSubNet2ID: "{{ cfnet['stack_outputs']['AdminSubNet2ID'] }}"
+      ProjectSubNet1ID: "{{ cfnet['stack_outputs']['ProjectSubNet1ID'] }}"
+      ProjectSubNet2ID: "{{ cfnet['stack_outputs']['ProjectSubNet2ID'] }}"
+      ProjectSubNet3ID: "{{ cfnet['stack_outputs']['ProjectSubNet3ID'] }}"
       SquidPort: "{{ squid_port }}"
-      SquidDist: "{{ squid_dist }}"
+      # Reached max parameters, need to remove this one
+      # SquidDist: "{{ squid_dist }}"
       VPCCiapID: "{{ cfnet['stack_outputs']['VPCCiapID'] }}"
       S3BucketPrefix: "{{ s3_bucket_prefix | lower }}"
     tags:
