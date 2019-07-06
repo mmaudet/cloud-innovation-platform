@@ -418,7 +418,7 @@ def launch_oil_env(task=None,
 if __name__ == '__main__':
   # check for AWS access info
   if os.getenv('AWS_ACCESS_KEY_ID') is None or os.getenv('AWS_SECRET_ACCESS_KEY') is None:
-    print 'ERROR: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY **MUST** be exported as environment variables.'
+    print('ERROR: AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY **MUST** be exported as environment variables.')
     sys.exit(1)
 
   launch_oil_env(auto_envvar_prefix='ITON_CIAP')

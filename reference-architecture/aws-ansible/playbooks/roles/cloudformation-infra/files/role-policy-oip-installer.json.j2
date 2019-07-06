@@ -4,6 +4,16 @@
     {
       "Effect": "Allow",
       "Action": [
+                  "s3:ListBucket*",
+                  "s3:ListAllMyBuckets",
+                  "s3:GetBucketLocation",
+                  "s3:ListBucketMultipartUploads"
+        ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
           "s3:*"
         ],
       "Resource": [

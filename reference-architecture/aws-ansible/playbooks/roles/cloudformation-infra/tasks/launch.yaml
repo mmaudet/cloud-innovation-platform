@@ -12,10 +12,14 @@
         Principal:
           AWS: arn:aws:iam::{{ root_account['account_id'] }}:user/{{ root_account['iam_user'] }}
           Service: ec2.amazonaws.com
+          Service: cloudformation.amazonaws.com
   register: iam
 
 - name: Saving installer role ID
   set_fact: installer_role_id="{{ iam['role_result']['role_id'] }}"
+
+- name: Saving installer role ARN
+  set_fact: installer_role_arn="{{ iam['role_result']['arn'] }}"
 
 
 - name: Creating rendered files directories
@@ -30,6 +34,7 @@
     - "{{ stack_name }}/bootstrap/common"
     - "{{ stack_name }}/bootstrap/common/pubkeys"
     - "{{ stack_name }}/bootstrap/nat"
+    - "{{ stack_name }}/bootstrap/tp"
     - "{{ stack_name }}/bootstrap/vpn"
     - "{{ stack_name }}/bootstrap/waf"
     - "{{ stack_name }}/bootstrap/waf/etc/nginx/conf.d"
@@ -71,7 +76,8 @@
     stack_name: "{{ stack_name }}-net"
     state: "present"
     region: "{{ region }}"
-    profile: "{{ aws_cli_installer_profile }}"
+    #profile: "{{ aws_cli_installer_profile }}"
+    role_arn: "{{ installer_role_arn }}"
     template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/network.yaml"
     template_parameters:
       NumberOfAZs: "3"
@@ -109,7 +115,8 @@
     stack_name: "{{ stack_name }}-rlp"
     state: "present"
     region: "{{ region }}"
-    profile: "{{ aws_cli_installer_profile }}"
+    #profile: "{{ aws_cli_installer_profile }}"
+    role_arn: "{{ installer_role_arn }}"
     template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/roles-logs-profiles.yaml"
     template_parameters:
       S3BucketPrefix: "{{ s3_bucket_prefix | lower }}"
@@ -172,7 +179,8 @@
     stack_name: "{{ stack_name }}-secgrp"
     state: "present"
     region: "{{ region }}"
-    profile: "{{ aws_cli_installer_profile }}"
+    #profile: "{{ aws_cli_installer_profile }}"
+    role_arn: "{{ installer_role_arn }}"
     template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/security-groups.yaml"
     template_parameters:
       VPCCiapID: "{{ cfnet['stack_outputs']['VPCCiapID'] }}"
@@ -189,7 +197,7 @@
   register: cfsecgrp
 
 - name: Bootstrap generating the list of templates to process, formatted as a json list
-  command: python -c 'import os, json; print json.dumps([os.path.join(dp, f)[2:] for dp, dn, fn in os.walk(os.path.expanduser(".")) for f in fn if f.endswith(".j2")])'
+  command: python -c 'import os, json; print(json.dumps([os.path.join(dp, f)[2:] for dp, dn, fn in os.walk(os.path.expanduser(".")) for f in fn if f.endswith(".j2")]))'
   args:
     chdir: roles/cloudformation-infra/files/bootstrap
   register: bootstrap_files_cmd
@@ -214,7 +222,8 @@
     stack_name: "{{ stack_name }}-netfunc"
     state: "present"
     region: "{{ region }}"
-    profile: "{{ aws_cli_installer_profile }}"
+    #profile: "{{ aws_cli_installer_profile }}"
+    role_arn: "{{ installer_role_arn }}"
     template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/network-functions.yaml"
     template_parameters:
       NumberOfAZs: "2"
@@ -313,7 +322,8 @@
     stack_name: "{{ stack_name }}-project-ocp-inf"
     state: "present"
     region: "{{ region }}"
-    profile: "{{ aws_cli_installer_profile }}"
+    #profile: "{{ aws_cli_installer_profile }}"
+    role_arn: "{{ installer_role_arn }}"
     template: "roles/cloudformation-infra/files/rendered/{{ stack_name }}/project-ocp-infra.yaml"
     template_parameters:
       NumberOfAZs: "3"
