@@ -1146,107 +1146,6 @@ Resources:
               Fn::ImportValue:
                 !Sub "{{ stack_name }}-rlp-TPCloudWatchLogsGroup"
 
-
-#  TPElasticLoadBalancer:
-#    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-#    Properties:
-#      Type: network
-#      IpAddressType: ipv4
-#      LoadBalancerAttributes:
-#        - Key: access_logs.s3.enabled
-#          Value: True
-#        - Key: access_logs.s3.bucket
-#          Value: !Ref S3LogsLocation
-#        - Key: access_logs.s3.prefix
-#          Value: ''
-#        - Key: deletion_protection.enabled
-#          Value: False
-#        - Key: load_balancing.cross_zone.enabled
-#          Value: True
-#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PROJECT-TPELB']]
-#      Scheme: internal
-#      Subnets:
-#{% for idx in range(1, project_nb_subnets|int + 1) %}
-#        - !Ref 'ProjectSubNet{{ idx }}ID'
-#{% endfor %}
-#      Tags:
-#        - Key: StackName
-#          Value: !Ref 'AWS::StackName'
-#
-#  TPELBTargetGroup80:
-#    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-#    Properties:
-#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PRJ-TPELBTG80']]
-#      Port: 80
-#      Protocol: TCP
-#      VpcId:
-#        Fn::ImportValue:
-#          !Sub "{{ stack_name }}-net-VPCProjectID"
-#      TargetGroupAttributes:
-#        - Key: deregistration_delay.timeout_seconds
-#          Value: 60
-#      Tags:
-#        - Key: StackName
-#          Value: !Ref 'AWS::StackName'
-#  TPELBTargetGroup443:
-#    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-#    Properties:
-#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PRJ-TPELBTG443']]
-#      Port: 443
-#      Protocol: TCP
-#      VpcId:
-#        Fn::ImportValue:
-#          !Sub "{{ stack_name }}-net-VPCProjectID"
-#      TargetGroupAttributes:
-#        - Key: deregistration_delay.timeout_seconds
-#          Value: 60
-#      Tags:
-#        - Key: StackName
-#          Value: !Ref 'AWS::StackName'
-#  TPELBTargetGroup3128:
-#    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-#    Properties:
-#      Name: !Join ['-', [!Ref 'AWS::StackName', 'PRJ-TPELBTG3128']]
-#      Port: 3128
-#      Protocol: TCP
-#      VpcId:
-#        Fn::ImportValue:
-#          !Sub "{{ stack_name }}-net-VPCProjectID"
-#      TargetGroupAttributes:
-#        - Key: deregistration_delay.timeout_seconds
-#          Value: 60
-#      Tags:
-#        - Key: StackName
-#          Value: !Ref 'AWS::StackName'
-#
-#  TPELBListener80:
-#    Type: AWS::ElasticLoadBalancingV2::Listener
-#    Properties:
-#      DefaultActions:
-#      - Type: forward
-#        TargetGroupArn: !Ref TPELBTargetGroup80
-#      LoadBalancerArn: !Ref TPElasticLoadBalancer
-#      Port: '80'
-#      Protocol: TCP
-#  TPELBListener443:
-#    Type: AWS::ElasticLoadBalancingV2::Listener
-#    Properties:
-#      DefaultActions:
-#      - Type: forward
-#        TargetGroupArn: !Ref TPELBTargetGroup443
-#      LoadBalancerArn: !Ref TPElasticLoadBalancer
-#      Port: '443'
-#      Protocol: TCP
-#  TPELBListener3128:
-#    Type: AWS::ElasticLoadBalancingV2::Listener
-#    Properties:
-#      DefaultActions:
-#      - Type: forward
-#        TargetGroupArn: !Ref TPELBTargetGroup3128
-#      LoadBalancerArn: !Ref TPElasticLoadBalancer
-#      Port: '3128'
-#      Protocol: TCP
-#
   TPScaleOutPolicy:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -1314,12 +1213,6 @@ Outputs:
   WAFDNSName:
     Description: DNS Name of WAF proxy ELB
     Value: !GetAtt [WAFElasticLoadBalancer, DNSName]
-#  TPELBName:
-#    Description: Name of Transparent proxy ELB
-#    Value: !Ref 'TPElasticLoadBalancer'
-#  TPDNSName:
-#    Description: DNS Name of Transparent proxy ELB
-#    Value: !GetAtt [TPElasticLoadBalancer, DNSName]
   SquidELBName:
     Description: Name of Squid proxy ELB
     Value: !Ref 'NATElasticLoadBalancer'
