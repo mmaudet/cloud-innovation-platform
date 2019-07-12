@@ -9,7 +9,7 @@ Parameters:
     - 3
     - 4
     Default: 2
-    Description: .
+    Description: Nb AZs.
     Type: String
   DeployWAFResources:
     Default: true
@@ -175,34 +175,13 @@ Resources:
       RouteTableId: !Ref CiapRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-  CiapRoute2Admin:
-    Type: AWS::EC2::Route
-    DependsOn: VPCCiap2AdminPeeringConnection
-    Properties:
-      RouteTableId: !Ref CiapRouteTable
-      DestinationCidrBlock: !Ref VPCAdminCIDR
-      VpcPeeringConnectionId: !Ref VPCCiap2AdminPeeringConnection
-  CiapRoute2Browsing:
+  CiapRoute2TGW:
     Type: AWS::EC2::Route
     DependsOn: TransitGatewayAttachmentCiap
     Properties:
       RouteTableId: !Ref CiapRouteTable
-      DestinationCidrBlock: 10.0.48.0/20
+      DestinationCidrBlock: 10.0.0.0/8
       TransitGatewayId: !Ref TransitGateway1
-  CiapRoute2Tech:
-    Type: AWS::EC2::Route
-    DependsOn: VPCCiap2TechPeeringConnection
-    Properties:
-      RouteTableId: !Ref CiapRouteTable
-      DestinationCidrBlock: !Ref VPCTechCIDR
-      VpcPeeringConnectionId: !Ref VPCCiap2TechPeeringConnection
-  CiapRoute2Project:
-    Type: AWS::EC2::Route
-    DependsOn: VPCCiap2ProjectPeeringConnection
-    Properties:
-      RouteTableId: !Ref CiapRouteTable
-      DestinationCidrBlock: !Ref VPCProjectCIDR
-      VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
 {% for idx in range(1, ciap_nb_subnets|int + 1) %}
   CiapHostingSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
@@ -263,36 +242,6 @@ Resources:
       SubnetId: !Ref CiapVPNSubNet{{ idx }}
       RouteTableId: !Ref CiapRouteTable
 {% endfor %}
-  VPCCiap2AdminPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId:
-        Ref: VPCCiap
-      PeerVpcId:
-        Ref: VPCAdmin
-      Tags:
-      - Key: Name
-        Value: !Join ['-', [!Ref 'AWS::StackName', 'Ciap2Admin']]
-  VPCCiap2TechPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId:
-        Ref: VPCCiap
-      PeerVpcId:
-        Ref: VPCTech
-      Tags:
-      - Key: Name
-        Value: !Join ['-', [!Ref 'AWS::StackName', 'Ciap2Tech']]
-  VPCCiap2ProjectPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId:
-        Ref: VPCCiap
-      PeerVpcId:
-        Ref: VPCProject
-      Tags:
-      - Key: Name
-        Value: !Join ['-', [!Ref 'AWS::StackName', 'Ciap2Project']]
   VPCCiapS3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -664,27 +613,13 @@ Resources:
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Admin-RouteTable']]
       - Key: Network
         Value: Admin
-  AdminRoute2Ciap:
+  AdminRoute2TGW:
     Type: AWS::EC2::Route
-    DependsOn: VPCCiap2AdminPeeringConnection
+    DependsOn: TransitGatewayAttachmentAdmin
     Properties:
       RouteTableId: !Ref AdminRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      VpcPeeringConnectionId: !Ref VPCCiap2AdminPeeringConnection
-  AdminRoute2Tech:
-    Type: AWS::EC2::Route
-    DependsOn: VPCAdmin2TechPeeringConnection
-    Properties:
-      RouteTableId: !Ref AdminRouteTable
-      DestinationCidrBlock: !Ref VPCTechCIDR
-      VpcPeeringConnectionId: !Ref VPCAdmin2TechPeeringConnection
-  AdminRoute2Project:
-    Type: AWS::EC2::Route
-    DependsOn: VPCAdmin2ProjectPeeringConnection
-    Properties:
-      RouteTableId: !Ref AdminRouteTable
-      DestinationCidrBlock: !Ref VPCProjectCIDR
-      VpcPeeringConnectionId: !Ref VPCAdmin2ProjectPeeringConnection
+      TransitGatewayId: !Ref TransitGateway1
 {% for idx in range(1, admin_nb_subnets|int + 1) %}
   AdminSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
@@ -706,26 +641,6 @@ Resources:
       SubnetId: !Ref AdminSubNet{{ idx }}
       RouteTableId: !Ref AdminRouteTable
 {% endfor %}
-  VPCAdmin2TechPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId:
-        Ref: VPCAdmin
-      PeerVpcId:
-        Ref: VPCTech
-      Tags:
-      - Key: Name
-        Value: !Join ['-', [!Ref 'AWS::StackName', 'Admin2Tech']]
-  VPCAdmin2ProjectPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId:
-        Ref: VPCAdmin
-      PeerVpcId:
-        Ref: VPCProject
-      Tags:
-      - Key: Name
-        Value: !Join ['-', [!Ref 'AWS::StackName', 'Admin2Project']]
   VPCAdminS3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -784,27 +699,13 @@ Resources:
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Tech-RouteTable']]
       - Key: Network
         Value: Tech
-  TechRoute2Ciap:
+  TechRoute2TGW:
     Type: AWS::EC2::Route
-    DependsOn: VPCCiap2TechPeeringConnection
+    DependsOn: TransitGatewayAttachmentTech
     Properties:
       RouteTableId: !Ref TechRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      VpcPeeringConnectionId: !Ref VPCCiap2TechPeeringConnection
-  TechRoute2Admin:
-    Type: AWS::EC2::Route
-    DependsOn: VPCAdmin2TechPeeringConnection
-    Properties:
-      RouteTableId: !Ref TechRouteTable
-      DestinationCidrBlock: !Ref VPCAdminCIDR
-      VpcPeeringConnectionId: !Ref VPCAdmin2TechPeeringConnection
-  TechRoute2Project:
-    Type: AWS::EC2::Route
-    DependsOn: VPCTech2ProjectPeeringConnection
-    Properties:
-      RouteTableId: !Ref TechRouteTable
-      DestinationCidrBlock: !Ref VPCProjectCIDR
-      VpcPeeringConnectionId: !Ref VPCTech2ProjectPeeringConnection
+      TransitGatewayId: !Ref TransitGateway1
 {% for idx in range(1, tech_nb_subnets|int + 1) %}
   TechSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
@@ -826,16 +727,6 @@ Resources:
       SubnetId: !Ref TechSubNet{{ idx }}
       RouteTableId: !Ref TechRouteTable
 {% endfor %}
-  VPCTech2ProjectPeeringConnection:
-    Type: AWS::EC2::VPCPeeringConnection
-    Properties:
-      VpcId:
-        Ref: VPCTech
-      PeerVpcId:
-        Ref: VPCProject
-      Tags:
-      - Key: Name
-        Value: !Join ['-', [!Ref 'AWS::StackName', 'Tech2Project']]
   VPCTechS3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -920,32 +811,11 @@ Resources:
 {% endfor %}
   ProjectRoute2Default:
     Type: AWS::EC2::Route
-    DependsOn: VPCCiap2ProjectPeeringConnection
+    DependsOn: TransitGatewayAttachmentProject
     Properties:
       RouteTableId: !Ref ProjectRouteTable
       DestinationCidrBlock: 0.0.0.0/0
-      VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
-  ProjectRoute2Ciap:
-    Type: AWS::EC2::Route
-    DependsOn: VPCCiap2ProjectPeeringConnection
-    Properties:
-      RouteTableId: !Ref ProjectRouteTable
-      DestinationCidrBlock: !Ref VPCCiapCIDR
-      VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
-  ProjectRoute2Admin:
-    Type: AWS::EC2::Route
-    DependsOn: VPCAdmin2ProjectPeeringConnection
-    Properties:
-      RouteTableId: !Ref ProjectRouteTable
-      DestinationCidrBlock: !Ref VPCAdminCIDR
-      VpcPeeringConnectionId: !Ref VPCAdmin2ProjectPeeringConnection
-  ProjectRoute2Tech:
-    Type: AWS::EC2::Route
-    DependsOn: VPCTech2ProjectPeeringConnection
-    Properties:
-      RouteTableId: !Ref ProjectRouteTable
-      DestinationCidrBlock: !Ref VPCTechCIDR
-      VpcPeeringConnectionId: !Ref VPCTech2ProjectPeeringConnection
+      TransitGatewayId: !Ref TransitGateway1
   VPCProjectS3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -1035,6 +905,105 @@ Resources:
       TransitGatewayId: !Ref TransitGateway1
       VpcId: !Ref VPCCiapBrowsing
 
+  TransitGateway1RouteTable:
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-RT-CIAPBrowsing']]
+        - Key: OpenInnovationLabStack
+          Value: {{stack_name}}
+      TransitGatewayId: !Ref TransitGateway1
+
+  TransitGateway1DefaultRoute:
+    Type: AWS::EC2::TransitGatewayRoute
+    DependsOn: TransitGatewayAttachmentCiapBrowsing
+    Properties:
+      Blackhole: False
+      DestinationCidrBlock: 0.0.0.0/0
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentCiapBrowsing
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1Route2Ciap:
+    Type: AWS::EC2::TransitGatewayRoute
+    DependsOn: TransitGatewayAttachmentCiap
+    Properties:
+      Blackhole: False
+      DestinationCidrBlock: !Ref VPCCiapCIDR
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentCiap
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1Route2CiapBrowsing:
+    Type: AWS::EC2::TransitGatewayRoute
+    DependsOn: TransitGatewayAttachmentCiapBrowsing
+    Properties:
+      Blackhole: False
+      DestinationCidrBlock: !Ref VPCCiapBrowsingCIDR
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentCiapBrowsing
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1Route2Admin:
+    Type: AWS::EC2::TransitGatewayRoute
+    DependsOn: TransitGatewayAttachmentAdmin
+    Properties:
+      Blackhole: False
+      DestinationCidrBlock: !Ref VPCAdminCIDR
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentAdmin
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1Route2Tech:
+    Type: AWS::EC2::TransitGatewayRoute
+    DependsOn: TransitGatewayAttachmentTech
+    Properties:
+      Blackhole: False
+      DestinationCidrBlock: !Ref VPCTechCIDR
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentTech
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1Route2Project:
+    Type: AWS::EC2::TransitGatewayRoute
+    DependsOn: TransitGatewayAttachmentProject
+    Properties:
+      Blackhole: False
+      DestinationCidrBlock: !Ref VPCProjectCIDR
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentProject
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1RTAttachmentCiap:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    DependsOn: TransitGatewayAttachmentCiap
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentCiap
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1RTAttachmentCiapBrowsing:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    DependsOn: TransitGatewayAttachmentCiapBrowsing
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentCiapBrowsing
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1RTAttachmentAdmin:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    DependsOn: TransitGatewayAttachmentAdmin
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentAdmin
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1RTAttachmentTech:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    DependsOn: TransitGatewayAttachmentTech
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentTech
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
+  TransitGateway1RTAttachmentProject:
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    DependsOn: TransitGatewayAttachmentProject
+    Properties:
+      TransitGatewayAttachmentId: !Ref TransitGatewayAttachmentProject
+      TransitGatewayRouteTableId: !Ref TransitGateway1RouteTable
+
   TransitGatewayAttachmentCiap:
     Type: AWS::EC2::TransitGatewayAttachment
     Properties:
@@ -1044,7 +1013,7 @@ Resources:
 {% endfor %}
       Tags:
         - Key: Name
-          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-Att-ADMIN']]
+          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-Att-CIAP']]
       TransitGatewayId: !Ref TransitGateway1
       VpcId: !Ref VPCCiap
 

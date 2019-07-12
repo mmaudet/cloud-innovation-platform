@@ -405,7 +405,7 @@ Resources:
       - IpProtocol: tcp
         FromPort: 22
         ToPort: 22
-        DestinationSecurityGroupId: !Ref 'BastionELBSecurityGroup'
+        CidrIp: 10.0.0.0/8
       - IpProtocol: tcp
         FromPort: !Ref SquidPort
         ToPort: !Ref SquidPort
