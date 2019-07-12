@@ -10,9 +10,12 @@
       - Effect: Allow
         Action: sts:AssumeRole
         Principal:
-          AWS: arn:aws:iam::{{ root_account['account_id'] }}:user/{{ root_account['iam_user'] }}
-          Service: ec2.amazonaws.com
-          Service: cloudformation.amazonaws.com
+          AWS:
+            - arn:aws:iam::{{ root_account['account_id'] }}:user/{{ root_account['iam_user'] }}
+            - arn:aws:iam::{{ root_account['account_id'] }}:user/factotum-bootstrap
+          Service:
+            - ec2.amazonaws.com
+            - cloudformation.amazonaws.com
   register: iam
 
 - name: Saving installer role ID

@@ -302,6 +302,90 @@ Resources:
       IpProtocol: tcp
       ToPort: !Ref 'SquidPort'
 
+  # NAT2
+  NAT2InstanceSecurityGroup:
+    Condition: NATInstanceCondition
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enables outbound internet access for the VPC via the NAT instances
+      VpcId:
+        Fn::ImportValue:
+          !Sub "{{ stack_name }}-net-VPCCiapBrowsingID"
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: '-1'
+        IpProtocol: '-1'
+        ToPort: '-1'
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPort
+        ToPort: !Ref SquidPort
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt80
+        ToPort: !Ref SquidPortInt80
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt443
+        ToPort: !Ref SquidPortInt443
+        CidrIp: 10.0.0.0/8
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        #SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+        CidrIp: 10.0.0.0/8
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-NAT2Instance']]
+
+  NAT2ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Squid proxy farm - ELB security group
+      VpcId:
+        Fn::ImportValue:
+          !Sub "{{ stack_name }}-net-VPCCiapBrowsingID"
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPort
+        ToPort: !Ref SquidPort
+        CidrIp: 10.0.0.0/8 #TODO: try to confine if relevent
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt80
+        ToPort: !Ref SquidPortInt80
+        CidrIp: 10.0.0.0/8 #TODO: try to confine if relevent
+      - IpProtocol: tcp
+        FromPort: !Ref SquidPortInt443
+        ToPort: !Ref SquidPortInt443
+        CidrIp: 10.0.0.0/8 #TODO: try to confine if relevent
+      - IpProtocol: tcp
+        FromPort: 22
+        ToPort: 22
+        #SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+        CidrIp: 10.0.0.0/8 #TODO: try to confine if relevent
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-NAT2-ELB']]
+
+  #TODO: check if needed for port SquidPortInt80 and SquidPortInt443
+  NAT2ELBSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      DestinationSecurityGroupId: !Ref NAT2InstanceSecurityGroup
+      FromPort: !Ref SquidPort
+      GroupId: !Ref NAT2ELBSecurityGroup
+      IpProtocol: tcp
+      ToPort: !Ref SquidPort
+
+
   VPNInstanceSecurityGroup:
     Condition: VPNInstanceCondition
     Type: AWS::EC2::SecurityGroup
@@ -321,7 +405,7 @@ Resources:
       - IpProtocol: tcp
         FromPort: 22
         ToPort: 22
-        DestinationSecurityGroupId: !Ref 'BastionELBSecurityGroup'
+        CidrIp: 10.0.0.0/8
       - IpProtocol: tcp
         FromPort: !Ref SquidPort
         ToPort: !Ref SquidPort
@@ -404,14 +488,16 @@ Resources:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Admin-Bastion-ELB']]
 
-  ### VPC Project
+  ### VPC CiapBrowsing
 
   TPInstanceSecurityGroup:
     Condition: TPInstanceCondition
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: Enables outbound internet access for the VPC via the upstream NAT instances
-      VpcId: !Ref VPCProjectID
+      VpcId:
+        Fn::ImportValue:
+          !Sub "{{ stack_name }}-net-VPCCiapBrowsingID"
       SecurityGroupEgress:
       - CidrIp: !Ref VPCAdminCIDR
         FromPort: '-1'
@@ -449,7 +535,8 @@ Resources:
       - IpProtocol: tcp
         FromPort: 22
         ToPort: 22
-        SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+        #SourceSecurityGroupId: !Ref BastionInstanceSecurityGroup
+        CidrIp: 10.0.0.0/8
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Project-TPInstance']]
@@ -467,6 +554,11 @@ Outputs:
     Description: NAT Instance Security Group ID
     Export:
       Name: !Sub ${AWS::StackName}-NATInstanceSecurityGroupID
+  NAT2InstanceSecurityGroupID:
+    Value: !Ref NAT2InstanceSecurityGroup
+    Description: NAT2 Instance Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-NAT2InstanceSecurityGroupID
   TPInstanceSecurityGroupID:
     Value: !Ref TPInstanceSecurityGroup
     Description: Transparent Proxy Instance Security Group ID
@@ -482,6 +574,11 @@ Outputs:
     Description: NAT ELB Security Group ID
     Export:
       Name: !Sub ${AWS::StackName}-NATELBSecurityGroupID
+  NAT2ELBSecurityGroupID:
+    Value: !Ref NAT2ELBSecurityGroup
+    Description: NAT2 ELB Security Group ID
+    Export:
+      Name: !Sub ${AWS::StackName}-NAT2ELBSecurityGroupID
   VPNInstanceSecurityGroupID:
     Value: !Ref VPNInstanceSecurityGroup
     Description: VPN Instance Security Group ID

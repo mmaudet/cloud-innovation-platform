@@ -787,6 +787,7 @@ Resources:
             Action:
             - ec2:DescribeInstances
             - ec2:DescribeRouteTables
+            - ec2:DescribeSubnets
             - ec2:ModifyInstanceAttribute
             Resource: '*'
       - PolicyName: EC2-CreateRoute
@@ -801,7 +802,7 @@ Resources:
             - "arn:aws:ec2:{{region}}:{{root_account['account_id']}}:route-table/*"
             Condition:
               StringEquals:
-                'ec2:vpc' : "arn:aws:ec2:{{region}}:{{root_account['account_id']}}:vpc/{{ cfnet['stack_outputs']['VPCProjectID'] }}"
+                'ec2:vpc' : "arn:aws:ec2:{{region}}:{{root_account['account_id']}}:vpc/{{ cfnet['stack_outputs']['VPCCiapBrowsingID'] }}"
 
   TPCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup

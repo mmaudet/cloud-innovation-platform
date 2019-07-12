@@ -76,7 +76,8 @@ generate_squid_config() {
   cache_effective_group squid
   cache_effective_user squid
 
-  http_port 3128 transparent
+  http_port 3128 require-proxy-header
+  http_port 3129 transparent
   #https_port 3130 intercept ssl-bump cert=/etc/squid/ssl_cert/myCA.pem generate-host-certificates=on dynamic_cert_mem_cache_size=4MB  options=NO_SSLv2,NO_SSLv3,NO_TLSv1,NO_TLSv1_1,NO_TICKET cipher=HIGH:MEDIUM:!RC4:!aNULL:!eNULL:!LOW:!3DES:!MD5:!EXP:!PSK:!SRP:!DSS
   https_port 3130 intercept ssl-bump cert=/etc/squid/ssl_cert/myCA.pem
 
@@ -149,25 +150,29 @@ install_and_run_squid() {
 }
 
 set_as_router() {
+  # Logic: find the region, zone and AZ of the instance then find out the
+  #        custom route table associated with the private subnetid of this
+  #        AZ and finaly set a new default route within that route table
+  #        pointing to the ENI of this instance
   echo "-> Adding IPTables rules to forward port 80 and 443 to the transparent Squid instance"
-  iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3128
+  iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 3129
   iptables -t nat -A PREROUTING -p tcp --dport 443 -j REDIRECT --to-port 3130
 
   II_URI="http://169.254.169.254/latest/dynamic/instance-identity/document"
-  # Set AZ of NAT instance
-  REGION=`curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep region | awk -F\" '{print $4}'`
-  INSTANCE_ID=`curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep instanceId | awk -F\" '{print $4}'`
-  VPC_ID=`aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[*].Instances[*].VpcId' --region $REGION --output text`
-  #TODO: Since the current automation creates a secondary route table, we need to pick a non 'main' route.
-  #      it works since there is only one such route table. Automation should be changed to use default route tables instead of specific one.
-  #MAIN_RT=`aws ec2 describe-route-tables --query 'RouteTables[*].RouteTableId' --filters Name=vpc-id,Values=$VPC_ID Name=association.main,Values=true --region $REGION --output text`
-  MAIN_RT=`aws ec2 describe-route-tables --query 'RouteTables[*].RouteTableId' --filters Name=vpc-id,Values=$VPC_ID Name=association.main,Values=false --region $REGION --output text`
+  REGION=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep region | awk -F\" '{print $4}')
+  INSTANCE_ID=$(curl --retry 3 --retry-delay 0 --silent --fail $II_URI | grep instanceId | awk -F\" '{print $4}')
+  VPC_ID=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[*].Instances[*].VpcId' --region $REGION --output text)
+  AZ=$(aws ec2 describe-instances --instance-ids $INSTANCE_ID --query 'Reservations[*].Instances[*].Placement.AvailabilityZone' --region $REGION --output text)
+  SUBNET_ID=$(aws ec2 describe-subnets --filters "Name=tag:Network,Values=CIAP_Browsing_Private" "Name=availability-zone,Values=$AZ" --query Subnets[*].SubnetId --region $REGION --output text)
+  MAIN_RT=$(aws ec2 describe-route-tables --filters "Name=association.subnet-id,Values=$SUBNET_ID" --query 'RouteTables[*].RouteTableId' --region $REGION --output text)
 
   # Printing some debuging information...
   cat <<EOT
   Transparent SQUID proxy - Initializing
   - Region: $REGION
+  - Availability Zone: $AZ
   - VPC ID: $VPC_ID
+  - Subnet ID: $SUBNET_ID
   - Instance ID: $INSTANCE_ID
   - Route table: $MAIN_RT
 EOT
