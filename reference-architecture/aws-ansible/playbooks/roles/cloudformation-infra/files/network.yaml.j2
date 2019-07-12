@@ -1,33 +1,27 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   This template creates a Multi-AZ, multi-VPC and multi-subnet infrastructure.
-  It contains definitions for core infrastructure:
-    VPCs: CIAP, Admin and Tech
-    Network elements: subnets, routing, internet gateways
-  **WARNING** This template creates AWS resources. You will be billed for the AWS
-  resources used if you create a stack from this template. QS(0027)
 
 Parameters:
   NumberOfAZs:
     AllowedValues:
-    - '2'
-    - '3'
-    - '4'
-    Default: '2'
-    Description: Number of Availability Zones to use in the VPC. This must match your
-      selections in the list of Availability Zones parameter.
+    - 2
+    - 3
+    - 4
+    Default: 2
+    Description: .
     Type: String
   DeployWAFResources:
     Default: true
-    Description: Deploy NAT resources or not
+    Description: .
     Type: String
   DeployNATResources:
     Default: true
-    Description: Deploy NAT resources or not
+    Description: .
     Type: String
   DeployVPNResources:
     Default: true
-    Description: Deploy VPN resources or not
+    Description: .
     Type: String
   VPCCiapCIDR:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
@@ -46,7 +40,7 @@ Parameters:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
     Default: 10.0.{{ ( idx - 1 ) * 4 + 1 }}.0/24
-    Description: CIDR block for Browsing subnet {{ idx }}A located in Availability Zone {{ idx }}
+    Description: CIDR block for Browsing subnet public {{ idx }}A located in Availability Zone {{ idx }}
     Type: String
   CiapVPNSubNet{{ idx }}CIDR:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
@@ -55,6 +49,19 @@ Parameters:
     Description: CIDR block for VPN subnet {{ idx }}A located in Availability Zone {{ idx }}
     Type: String
 {% endfor %}
+  VPCCiapBrowsingCIDR:
+    AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+    Default: 10.0.48.0/20
+    Description: CIDR block for the CIAP Browsing VPC
+    Type: String
+  VPCCiapBrowsingSubnetBits:
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/19-27.
+    MinValue: 5
+    MaxValue: 13
+    Default: 5
+    Description: "Size of each subnet to create within the availability zones. (Min: 5 = /27, Max: 13 = /19)"
+    Type: Number
   VPCAdminCIDR:
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/(1[6-9]|2[0-8]))$
     ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
@@ -115,7 +122,8 @@ Conditions:
   NVirginiaRegionCondition: !Equals [!Ref 'AWS::Region', us-east-1]
 
 Resources:
-  ### VPC CIAP
+
+  ### VPC CIAP - Hosting
   VPCCiapDHCPOptions:
     Type: AWS::EC2::DHCPOptions
     Properties:
@@ -128,17 +136,17 @@ Resources:
   VPCCiap:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref 'VPCCiapCIDR'
-      EnableDnsSupport: 'true'
-      EnableDnsHostnames: 'true'
+      CidrBlock: !Ref VPCCiapCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'VPC-Ciap']]
   VPCCiapDHCPOptionsAssociation:
     Type: AWS::EC2::VPCDHCPOptionsAssociation
     Properties:
-      VpcId: !Ref 'VPCCiap'
-      DhcpOptionsId: !Ref 'VPCCiapDHCPOptions'
+      VpcId: !Ref VPCCiap
+      DhcpOptionsId: !Ref VPCCiapDHCPOptions
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -150,12 +158,12 @@ Resources:
   VPCCiapGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref 'VPCCiap'
-      InternetGatewayId: !Ref 'InternetGateway'
+      VpcId: !Ref VPCCiap
+      InternetGatewayId: !Ref InternetGateway
   CiapRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref 'VPCCiap'
+      VpcId: !Ref VPCCiap
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-RouteTable']]
@@ -164,36 +172,43 @@ Resources:
   CiapRouteDefault:
     Type: AWS::EC2::Route
     Properties:
-      RouteTableId: !Ref 'CiapRouteTable'
+      RouteTableId: !Ref CiapRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
   CiapRoute2Admin:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2AdminPeeringConnection
     Properties:
-      RouteTableId: !Ref 'CiapRouteTable'
+      RouteTableId: !Ref CiapRouteTable
       DestinationCidrBlock: !Ref VPCAdminCIDR
       VpcPeeringConnectionId: !Ref VPCCiap2AdminPeeringConnection
+  CiapRoute2Browsing:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGatewayAttachmentCiap
+    Properties:
+      RouteTableId: !Ref CiapRouteTable
+      DestinationCidrBlock: 10.0.48.0/20
+      TransitGatewayId: !Ref TransitGateway1
   CiapRoute2Tech:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2TechPeeringConnection
     Properties:
-      RouteTableId: !Ref 'CiapRouteTable'
+      RouteTableId: !Ref CiapRouteTable
       DestinationCidrBlock: !Ref VPCTechCIDR
       VpcPeeringConnectionId: !Ref VPCCiap2TechPeeringConnection
   CiapRoute2Project:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2ProjectPeeringConnection
     Properties:
-      RouteTableId: !Ref 'CiapRouteTable'
+      RouteTableId: !Ref CiapRouteTable
       DestinationCidrBlock: !Ref VPCProjectCIDR
       VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
 {% for idx in range(1, ciap_nb_subnets|int + 1) %}
   CiapHostingSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'VPCCiap'
-      CidrBlock: !Ref 'CiapHostingSubNet{{ idx }}CIDR'
+      VpcId: !Ref VPCCiap
+      CidrBlock: !Ref CiapHostingSubNet{{ idx }}CIDR
       AvailabilityZone:
         Fn::Select:
           - {{ idx - 1 }}
@@ -206,13 +221,13 @@ Resources:
   CiapHostingSubNet{{ idx }}RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref 'CiapHostingSubNet{{ idx }}'
-      RouteTableId: !Ref 'CiapRouteTable'
+      SubnetId: !Ref CiapHostingSubNet{{ idx }}
+      RouteTableId: !Ref CiapRouteTable
   CiapBrowsingSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'VPCCiap'
-      CidrBlock: !Ref 'CiapBrowsingSubNet{{ idx }}CIDR'
+      VpcId: !Ref VPCCiap
+      CidrBlock: !Ref CiapBrowsingSubNet{{ idx }}CIDR
       AvailabilityZone:
         Fn::Select:
           - {{ idx - 1 }}
@@ -225,14 +240,14 @@ Resources:
   CiapBrowsingSubNet{{ idx }}RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref 'CiapBrowsingSubNet{{ idx }}'
-      RouteTableId: !Ref 'CiapRouteTable'
+      SubnetId: !Ref CiapBrowsingSubNet{{ idx }}
+      RouteTableId: !Ref CiapRouteTable
   CiapVPNSubNet{{ idx }}:
     Condition: VPNInstanceCondition
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'VPCCiap'
-      CidrBlock: !Ref 'CiapVPNSubNet{{ idx }}CIDR'
+      VpcId: !Ref VPCCiap
+      CidrBlock: !Ref CiapVPNSubNet{{ idx }}CIDR
       AvailabilityZone:
         Fn::Select:
           - {{ idx - 1 }}
@@ -245,8 +260,8 @@ Resources:
   CiapVPNSubNet{{ idx }}RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref 'CiapVPNSubNet{{ idx }}'
-      RouteTableId: !Ref 'CiapRouteTable'
+      SubnetId: !Ref CiapVPNSubNet{{ idx }}
+      RouteTableId: !Ref CiapRouteTable
 {% endfor %}
   VPCCiap2AdminPeeringConnection:
     Type: AWS::EC2::VPCPeeringConnection
@@ -282,13 +297,13 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
         - Sid: Allow access to AMZN Linux repo
           Principal: '*'
           Action:
-            - 's3:List*'
-            - 's3:Get*'
+            - s3:List*
+            - s3:Get*
           Effect: Allow
           Resource:
             - !Join ['', ['arn:aws:s3:::repo.eu-west-1.amazonaws.com']]
@@ -296,10 +311,10 @@ Resources:
         - Sid: Allow access only to current stack buckets
           Principal: '*'
           Action:
-            - 's3:CreateBucket'
-            - 's3:List*'
-            - 's3:Get*'
-            - 's3:Put*'
+            - s3:CreateBucket
+            - s3:List*
+            - s3:Get*
+            - s3:Put*
           Effect: Allow
           Resource:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
@@ -311,13 +326,311 @@ Resources:
         - Sid: Allow listing buckets (required by ansible s3_bucket module)
           Principal: '*'
           Action:
-            - 's3:ListAllMyBuckets'
+            - s3:ListAllMyBuckets
           Effect: Allow
           Resource: '*'
       RouteTableIds:
-      - !Ref 'CiapRouteTable'
+      - !Ref CiapRouteTable
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
-      VpcId: !Ref 'VPCCiap'
+      VpcId: !Ref VPCCiap
+
+
+  ### VPC CIAP - Browsing
+  VPCCiapBrowsing:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VPCCiapBrowsingCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'VPC-CiapBrowsing']]
+
+  # Public subnets
+  CiapBrowsingPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      CidrBlock: !Select [0, !Cidr [!Ref VPCCiapBrowsingCIDR, 6, !Ref VPCCiapBrowsingSubnetBits]]
+      AvailabilityZone: !Select
+      - 0
+      - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-Browsing-Public-subnet-1']]
+      - Key: Network
+        Value: CIAP_Browsing_Public
+
+  CiapBrowsingPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: 2AZCondition
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      CidrBlock: !Select [1, !Cidr [!Ref VPCCiapBrowsingCIDR, 6, !Ref VPCCiapBrowsingSubnetBits]]
+      AvailabilityZone: !Select
+      - 1
+      - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-Browsing-Public-subnet-2']]
+      - Key: Network
+        Value: CIAP_Browsing_Public
+
+  CiapBrowsingPublicSubnet3:
+    Type: AWS::EC2::Subnet
+    Condition: 3AZCondition
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      CidrBlock: !Select [2, !Cidr [!Ref VPCCiapBrowsingCIDR, 6, !Ref VPCCiapBrowsingSubnetBits]]
+      AvailabilityZone: !Select
+      - 2
+      - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-Browsing-Public-subnet-3']]
+      - Key: Network
+        Value: CIAP_Browsing_Public
+
+  CiapBrowsingPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAPBrowsing-PublicRouteTable']]
+      - Key: Network
+        Value: CIAP_Browsing_Public
+
+  CiapBrowsingPublicSubNetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref CiapBrowsingPublicSubnet1
+      RouteTableId: !Ref CiapBrowsingPublicRouteTable
+
+  CiapBrowsingPublicSubNetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: 2AZCondition
+    Properties:
+      SubnetId: !Ref CiapBrowsingPublicSubnet2
+      RouteTableId: !Ref CiapBrowsingPublicRouteTable
+
+  CiapBrowsingPublicSubNetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: 3AZCondition
+    Properties:
+      SubnetId: !Ref CiapBrowsingPublicSubnet3
+      RouteTableId: !Ref CiapBrowsingPublicRouteTable
+
+  # Private subnets
+  CiapBrowsingPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      CidrBlock: !Select [3, !Cidr [!Ref VPCCiapBrowsingCIDR, 6, !Ref VPCCiapBrowsingSubnetBits]]
+      AvailabilityZone: !Select
+      - 0
+      - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-Browsing-Private-subnet-1']]
+      - Key: Network
+        Value: CIAP_Browsing_Private
+
+  CiapBrowsingPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: 2AZCondition
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      CidrBlock: !Select [4, !Cidr [!Ref VPCCiapBrowsingCIDR, 6, !Ref VPCCiapBrowsingSubnetBits]]
+      AvailabilityZone: !Select
+      - 1
+      - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-Browsing-Private-subnet-2']]
+      - Key: Network
+        Value: CIAP_Browsing_Private
+
+  CiapBrowsingPrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Condition: 3AZCondition
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      CidrBlock: !Select [5, !Cidr [!Ref VPCCiapBrowsingCIDR, 6, !Ref VPCCiapBrowsingSubnetBits]]
+      AvailabilityZone: !Select
+      - 2
+      - Fn::GetAZs: !Ref AWS::Region
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-Browsing-Private-subnet-3']]
+      - Key: Network
+        Value: CIAP_Browsing_Private
+
+  CiapBrowsingPrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAPBrowsing-PrivateRouteTable1']]
+      - Key: Network
+        Value: CIAP_Browsing_Private1
+
+  CiapBrowsingPrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Condition: 2AZCondition
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAPBrowsing-PrivateRouteTable2']]
+      - Key: Network
+        Value: CIAP_Browsing_Private2
+
+  CiapBrowsingPrivateRouteTable3:
+    Type: AWS::EC2::RouteTable
+    Condition: 3AZCondition
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAPBrowsing-PrivateRouteTable3']]
+      - Key: Network
+        Value: CIAP_Browsing_Private3
+
+  CiapBrowsingPrivateSubNetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref CiapBrowsingPrivateSubnet1
+      RouteTableId: !Ref CiapBrowsingPrivateRouteTable1
+
+  CiapBrowsingPrivateSubNetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: 2AZCondition
+    Properties:
+      SubnetId: !Ref CiapBrowsingPrivateSubnet2
+      RouteTableId: !Ref CiapBrowsingPrivateRouteTable2
+
+  CiapBrowsingPrivateSubNetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: 3AZCondition
+    Properties:
+      SubnetId: !Ref CiapBrowsingPrivateSubnet3
+      RouteTableId: !Ref CiapBrowsingPrivateRouteTable3
+
+  CiapBrowsingPrivateRoute1TGW:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGateway1
+    Properties:
+      RouteTableId: !Ref CiapBrowsingPrivateRouteTable1
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+
+  CiapBrowsingPrivateRoute2TGW:
+    Type: AWS::EC2::Route
+    Condition: 2AZCondition
+    DependsOn: TransitGateway1
+    Properties:
+      RouteTableId: !Ref CiapBrowsingPrivateRouteTable2
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+
+  CiapBrowsingPrivateRoute3TGW:
+    Type: AWS::EC2::Route
+    Condition: 3AZCondition
+    DependsOn: TransitGateway1
+    Properties:
+      RouteTableId: !Ref CiapBrowsingPrivateRouteTable3
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+
+  CiapBrowsingPublicRouteTableDefault:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref CiapBrowsingPublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGatewayBrowsing
+
+  CiapBrowsingPublicRouteTGW:
+    Type: AWS::EC2::Route
+    DependsOn: TransitGateway1
+    Properties:
+      RouteTableId: !Ref CiapBrowsingPublicRouteTable
+      DestinationCidrBlock: 10.0.0.0/8
+      TransitGatewayId: !Ref TransitGateway1
+
+  VPCCiapBrowsingDHCPOptions:
+    Type: AWS::EC2::DHCPOptions
+    Properties:
+      DomainName: {{ private_dns_domain }}
+      DomainNameServers:
+      - AmazonProvidedDNS
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'VPC-CiapBrowsing']]
+
+  VPCCiapBrowsingDHCPOptionsAssociation:
+    Type: AWS::EC2::VPCDHCPOptionsAssociation
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      DhcpOptionsId: !Ref VPCCiapBrowsingDHCPOptions
+
+  InternetGatewayBrowsing:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'IGWBrowsing']]
+      - Key: Network
+        Value: Public
+
+  VPCCiapBrowsingGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPCCiapBrowsing
+      InternetGatewayId: !Ref InternetGatewayBrowsing
+
+  VPCCiapBrowsingS3VPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Sid: Allow access to AMZN Linux repo
+          Principal: '*'
+          Action:
+            - s3:List*
+            - s3:Get*
+          Effect: Allow
+          Resource:
+            - !Join ['', ['arn:aws:s3:::repo.eu-west-1.amazonaws.com']]
+            - !Join ['', ['arn:aws:s3:::repo.eu-west-1.amazonaws.com/*']]
+        - Sid: Allow access only to current stack buckets
+          Principal: '*'
+          Action:
+            - s3:CreateBucket
+            - s3:List*
+            - s3:Get*
+            - s3:Put*
+          Effect: Allow
+          Resource:
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+        - Sid: Allow listing buckets (required by ansible s3_bucket module)
+          Principal: '*'
+          Action:
+            - s3:ListAllMyBuckets
+          Effect: Allow
+          Resource: '*'
+      RouteTableIds:
+      - !Ref CiapBrowsingPublicRouteTable
+      ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
+      VpcId: !Ref VPCCiapBrowsing
+
   ### VPC Admin
   VPCAdminDHCPOptions:
     Type: AWS::EC2::DHCPOptions
@@ -331,21 +644,21 @@ Resources:
   VPCAdmin:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref 'VPCAdminCIDR'
-      EnableDnsSupport: 'true'
-      EnableDnsHostnames: 'true'
+      CidrBlock: !Ref VPCAdminCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'VPC-Admin']]
   VPCAdminDHCPOptionsAssociation:
     Type: AWS::EC2::VPCDHCPOptionsAssociation
     Properties:
-      VpcId: !Ref 'VPCAdmin'
-      DhcpOptionsId: !Ref 'VPCAdminDHCPOptions'
+      VpcId: !Ref VPCAdmin
+      DhcpOptionsId: !Ref VPCAdminDHCPOptions
   AdminRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref 'VPCAdmin'
+      VpcId: !Ref VPCAdmin
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Admin-RouteTable']]
@@ -355,29 +668,29 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2AdminPeeringConnection
     Properties:
-      RouteTableId: !Ref 'AdminRouteTable'
+      RouteTableId: !Ref AdminRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       VpcPeeringConnectionId: !Ref VPCCiap2AdminPeeringConnection
   AdminRoute2Tech:
     Type: AWS::EC2::Route
     DependsOn: VPCAdmin2TechPeeringConnection
     Properties:
-      RouteTableId: !Ref 'AdminRouteTable'
+      RouteTableId: !Ref AdminRouteTable
       DestinationCidrBlock: !Ref VPCTechCIDR
       VpcPeeringConnectionId: !Ref VPCAdmin2TechPeeringConnection
   AdminRoute2Project:
     Type: AWS::EC2::Route
     DependsOn: VPCAdmin2ProjectPeeringConnection
     Properties:
-      RouteTableId: !Ref 'AdminRouteTable'
+      RouteTableId: !Ref AdminRouteTable
       DestinationCidrBlock: !Ref VPCProjectCIDR
       VpcPeeringConnectionId: !Ref VPCAdmin2ProjectPeeringConnection
 {% for idx in range(1, admin_nb_subnets|int + 1) %}
   AdminSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'VPCAdmin'
-      CidrBlock: !Ref 'AdminSubNet{{ idx }}CIDR'
+      VpcId: !Ref VPCAdmin
+      CidrBlock: !Ref AdminSubNet{{ idx }}CIDR
       AvailabilityZone:
         Fn::Select:
           - {{ idx - 1 }}
@@ -390,8 +703,8 @@ Resources:
   AdminSubNet{{ idx }}RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref 'AdminSubNet{{ idx }}'
-      RouteTableId: !Ref 'AdminRouteTable'
+      SubnetId: !Ref AdminSubNet{{ idx }}
+      RouteTableId: !Ref AdminRouteTable
 {% endfor %}
   VPCAdmin2TechPeeringConnection:
     Type: AWS::EC2::VPCPeeringConnection
@@ -417,15 +730,15 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
         - Sid: Allow access only to current stack buckets
           Principal: '*'
           Action:
-            - 's3:CreateBucket'
-            - 's3:List*'
-            - 's3:Get*'
-            - 's3:Put*'
+            - s3:CreateBucket
+            - s3:List*
+            - s3:Get*
+            - s3:Put*
           Effect: Allow
           Resource:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
@@ -435,9 +748,9 @@ Resources:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
       RouteTableIds:
-      - !Ref 'AdminRouteTable'
+      - !Ref AdminRouteTable
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
-      VpcId: !Ref 'VPCAdmin'
+      VpcId: !Ref VPCAdmin
   ### VPC Tech
   VPCTechDHCPOptions:
     Type: AWS::EC2::DHCPOptions
@@ -451,21 +764,21 @@ Resources:
   VPCTech:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref 'VPCTechCIDR'
-      EnableDnsSupport: 'true'
-      EnableDnsHostnames: 'true'
+      CidrBlock: !Ref VPCTechCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'VPC-Tech']]
   VPCTechDHCPOptionsAssociation:
     Type: AWS::EC2::VPCDHCPOptionsAssociation
     Properties:
-      VpcId: !Ref 'VPCTech'
-      DhcpOptionsId: !Ref 'VPCTechDHCPOptions'
+      VpcId: !Ref VPCTech
+      DhcpOptionsId: !Ref VPCTechDHCPOptions
   TechRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref 'VPCTech'
+      VpcId: !Ref VPCTech
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Tech-RouteTable']]
@@ -475,29 +788,29 @@ Resources:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2TechPeeringConnection
     Properties:
-      RouteTableId: !Ref 'TechRouteTable'
+      RouteTableId: !Ref TechRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       VpcPeeringConnectionId: !Ref VPCCiap2TechPeeringConnection
   TechRoute2Admin:
     Type: AWS::EC2::Route
     DependsOn: VPCAdmin2TechPeeringConnection
     Properties:
-      RouteTableId: !Ref 'TechRouteTable'
+      RouteTableId: !Ref TechRouteTable
       DestinationCidrBlock: !Ref VPCAdminCIDR
       VpcPeeringConnectionId: !Ref VPCAdmin2TechPeeringConnection
   TechRoute2Project:
     Type: AWS::EC2::Route
     DependsOn: VPCTech2ProjectPeeringConnection
     Properties:
-      RouteTableId: !Ref 'TechRouteTable'
+      RouteTableId: !Ref TechRouteTable
       DestinationCidrBlock: !Ref VPCProjectCIDR
       VpcPeeringConnectionId: !Ref VPCTech2ProjectPeeringConnection
 {% for idx in range(1, tech_nb_subnets|int + 1) %}
   TechSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'VPCTech'
-      CidrBlock: !Ref 'TechSubNet{{ idx }}CIDR'
+      VpcId: !Ref VPCTech
+      CidrBlock: !Ref TechSubNet{{ idx }}CIDR
       AvailabilityZone:
         Fn::Select:
           - {{ idx - 1 }}
@@ -510,8 +823,8 @@ Resources:
   TechSubNet{{ idx }}RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref 'TechSubNet{{ idx }}'
-      RouteTableId: !Ref 'TechRouteTable'
+      SubnetId: !Ref TechSubNet{{ idx }}
+      RouteTableId: !Ref TechRouteTable
 {% endfor %}
   VPCTech2ProjectPeeringConnection:
     Type: AWS::EC2::VPCPeeringConnection
@@ -527,15 +840,15 @@ Resources:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
         - Sid: Allow access only to current stack buckets
           Principal: '*'
           Action:
-            - 's3:CreateBucket'
-            - 's3:List*'
-            - 's3:Get*'
-            - 's3:Put*'
+            - s3:CreateBucket
+            - s3:List*
+            - s3:Get*
+            - s3:Put*
           Effect: Allow
           Resource:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
@@ -545,9 +858,9 @@ Resources:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
       RouteTableIds:
-      - !Ref 'TechRouteTable'
+      - !Ref TechRouteTable
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
-      VpcId: !Ref 'VPCTech'
+      VpcId: !Ref VPCTech
   ### VPC Project
   VPCProjectDHCPOptions:
     Type: AWS::EC2::DHCPOptions
@@ -562,21 +875,21 @@ Resources:
   VPCProject:
     Type: AWS::EC2::VPC
     Properties:
-      CidrBlock: !Ref 'VPCProjectCIDR'
-      EnableDnsSupport: 'true'
-      EnableDnsHostnames: 'true'
+      CidrBlock: !Ref VPCProjectCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'VPC-Project']]
   VPCProjectDHCPOptionsAssociation:
     Type: AWS::EC2::VPCDHCPOptionsAssociation
     Properties:
-      VpcId: !Ref 'VPCProject'
-      DhcpOptionsId: !Ref 'VPCProjectDHCPOptions'
+      VpcId: !Ref VPCProject
+      DhcpOptionsId: !Ref VPCProjectDHCPOptions
   ProjectRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref 'VPCProject'
+      VpcId: !Ref VPCProject
       Tags:
       - Key: Name
         Value: !Join ['-', [!Ref 'AWS::StackName', 'Project-RouteTable']]
@@ -586,8 +899,8 @@ Resources:
   ProjectSubNet{{ idx }}:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref 'VPCProject'
-      CidrBlock: !Ref 'ProjectSubNet{{ idx }}CIDR'
+      VpcId: !Ref VPCProject
+      CidrBlock: !Ref ProjectSubNet{{ idx }}CIDR
       AvailabilityZone:
         Fn::Select:
           - {{ idx - 1 }}
@@ -602,50 +915,50 @@ Resources:
   ProjectSubNet{{ idx }}RouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref 'ProjectSubNet{{ idx }}'
-      RouteTableId: !Ref 'ProjectRouteTable'
+      SubnetId: !Ref ProjectSubNet{{ idx }}
+      RouteTableId: !Ref ProjectRouteTable
 {% endfor %}
   ProjectRoute2Default:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2ProjectPeeringConnection
     Properties:
-      RouteTableId: !Ref 'ProjectRouteTable'
+      RouteTableId: !Ref ProjectRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
   ProjectRoute2Ciap:
     Type: AWS::EC2::Route
     DependsOn: VPCCiap2ProjectPeeringConnection
     Properties:
-      RouteTableId: !Ref 'ProjectRouteTable'
+      RouteTableId: !Ref ProjectRouteTable
       DestinationCidrBlock: !Ref VPCCiapCIDR
       VpcPeeringConnectionId: !Ref VPCCiap2ProjectPeeringConnection
   ProjectRoute2Admin:
     Type: AWS::EC2::Route
     DependsOn: VPCAdmin2ProjectPeeringConnection
     Properties:
-      RouteTableId: !Ref 'ProjectRouteTable'
+      RouteTableId: !Ref ProjectRouteTable
       DestinationCidrBlock: !Ref VPCAdminCIDR
       VpcPeeringConnectionId: !Ref VPCAdmin2ProjectPeeringConnection
   ProjectRoute2Tech:
     Type: AWS::EC2::Route
     DependsOn: VPCTech2ProjectPeeringConnection
     Properties:
-      RouteTableId: !Ref 'ProjectRouteTable'
+      RouteTableId: !Ref ProjectRouteTable
       DestinationCidrBlock: !Ref VPCTechCIDR
       VpcPeeringConnectionId: !Ref VPCTech2ProjectPeeringConnection
   VPCProjectS3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
       PolicyDocument:
-        Version: '2012-10-17'
+        Version: 2012-10-17
         Statement:
         - Sid: Allow access only to current stack buckets
           Principal: '*'
           Action:
-            - 's3:CreateBucket'
-            - 's3:List*'
-            - 's3:Get*'
-            - 's3:Put*'
+            - s3:CreateBucket
+            - s3:List*
+            - s3:Get*
+            - s3:Put*
           Effect: Allow
           Resource:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
@@ -655,189 +968,308 @@ Resources:
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
             - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
       RouteTableIds:
-      - !Ref 'ProjectRouteTable'
+      - !Ref ProjectRouteTable
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
-      VpcId: !Ref 'VPCProject'
+      VpcId: !Ref VPCProject
 
   ### DNS
   ### Public zones are created by Ansible because they may need to persist when stack is deleted...
   DNSPrivateZone:
-    Type: "AWS::Route53::HostedZone"
+    Type: AWS::Route53::HostedZone
     Properties:
       HostedZoneConfig:
         Comment: !Join ['', ['Private DNS Domain Name for stack ', !Ref 'AWS::StackName']]
       Name: !Ref PrivateDNSDomain
       VPCs:
         -
-          VPCId: !Ref 'VPCCiap'
-          VPCRegion: !Ref 'AWS::Region'
+          VPCId: !Ref VPCCiap
+          VPCRegion: !Ref AWS::Region
         -
-          VPCId: !Ref 'VPCAdmin'
-          VPCRegion: !Ref 'AWS::Region'
+          VPCId: !Ref VPCCiapBrowsing
+          VPCRegion: !Ref AWS::Region
         -
-          VPCId: !Ref 'VPCTech'
-          VPCRegion: !Ref 'AWS::Region'
+          VPCId: !Ref VPCAdmin
+          VPCRegion: !Ref AWS::Region
         -
-          VPCId: !Ref 'VPCProject'
-          VPCRegion: !Ref 'AWS::Region'
+          VPCId: !Ref VPCTech
+          VPCRegion: !Ref AWS::Region
+        -
+          VPCId: !Ref VPCProject
+          VPCRegion: !Ref AWS::Region
       HostedZoneTags:
         -
-          Key: "DomainName"
+          Key: DomainName
           Value: !Ref PrivateDNSDomain
+
+  TransitGateway1:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      AmazonSideAsn: 65000
+      Description: Transit Gateway for stack {{stack_name}}
+      AutoAcceptSharedAttachments: enable
+      DefaultRouteTableAssociation: enable
+      DnsSupport: enable
+      VpnEcmpSupport: enable
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW']]
+
+  TransitGatewayAttachmentCiapBrowsing:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+        - !Ref CiapBrowsingPrivateSubnet1
+        - 'Fn::If':
+          - 2AZCondition
+          -
+            !Ref CiapBrowsingPrivateSubnet2
+          - !Ref "AWS::NoValue"
+        - 'Fn::If':
+          - 3AZCondition
+          -
+            !Ref CiapBrowsingPrivateSubnet3
+          - !Ref "AWS::NoValue"
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-Att-CIAPBrowsing']]
+      TransitGatewayId: !Ref TransitGateway1
+      VpcId: !Ref VPCCiapBrowsing
+
+  TransitGatewayAttachmentCiap:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+        - !Ref CiapHostingSubNet{{ idx }}
+{% endfor %}
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-Att-ADMIN']]
+      TransitGatewayId: !Ref TransitGateway1
+      VpcId: !Ref VPCCiap
+
+  TransitGatewayAttachmentAdmin:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+{% for idx in range(1, admin_nb_subnets|int + 1) %}
+        - !Ref AdminSubNet{{ idx }}
+{% endfor %}
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-Att-ADMIN']]
+      TransitGatewayId: !Ref TransitGateway1
+      VpcId: !Ref VPCAdmin
+
+  TransitGatewayAttachmentTech:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+{% for idx in range(1, tech_nb_subnets|int + 1) %}
+        - !Ref TechSubNet{{ idx }}
+{% endfor %}
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-Att-TECH']]
+      TransitGatewayId: !Ref TransitGateway1
+      VpcId: !Ref VPCTech
+
+  TransitGatewayAttachmentProject:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      SubnetIds:
+{% for idx in range(1, project_nb_subnets|int + 1) %}
+        - !Ref ProjectSubNet{{ idx }}
+{% endfor %}
+      Tags:
+        - Key: Name
+          Value: !Join ['-', [!Ref 'AWS::StackName', 'TGW-Att-PROJECT']]
+      TransitGatewayId: !Ref TransitGateway1
+      VpcId: !Ref VPCProject
+
+
 
 Outputs:
   VPCCiapCIDR:
-    Value: !Ref 'VPCCiapCIDR'
+    Value: !Ref VPCCiapCIDR
     Description: VPC CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-VPCCiapCIDR'
+      Name: !Sub ${AWS::StackName}-VPCCiapCIDR
   VPCCiapID:
-    Value: !Ref 'VPCCiap'
+    Value: !Ref VPCCiap
     Description: VPC ID
     Export:
-      Name: !Sub '${AWS::StackName}-VPCCiapID'
+      Name: !Sub ${AWS::StackName}-VPCCiapID
   CiapRouteTableID:
-    Value: !Ref 'CiapRouteTable'
+    Value: !Ref CiapRouteTable
     Description: CIAP route table
     Export:
-      Name: !Sub '${AWS::StackName}-CiapRouteTable'
+      Name: !Sub ${AWS::StackName}-CiapRouteTable
 {% for idx in range(1, ciap_nb_subnets|int + 1) %}
   CiapHostingSubNet{{ idx }}CIDR:
     Description: CIAP Hosting subnet 1 CIDR in Availability Zone {{ idx }}
-    Value: !Ref 'CiapHostingSubNet{{ idx }}CIDR'
+    Value: !Ref CiapHostingSubNet{{ idx }}CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-CiapHostingSubNet{{ idx }}CIDR'
+      Name: !Sub ${AWS::StackName}-CiapHostingSubNet{{ idx }}CIDR
   CiapHostingSubNet{{ idx }}ID:
     Description: CIAP Hosting subnet 1 ID in Availability Zone {{ idx }}
-    Value: !Ref 'CiapHostingSubNet{{ idx }}'
+    Value: !Ref CiapHostingSubNet{{ idx }}
     Export:
-      Name: !Sub '${AWS::StackName}-CiapHostingSubNet{{ idx }}ID'
+      Name: !Sub ${AWS::StackName}-CiapHostingSubNet{{ idx }}ID
   CiapBrowsingSubNet{{ idx }}CIDR:
     Description: CIAP Browsing subnet 1 CIDR in Availability Zone {{ idx }}
-    Value: !Ref 'CiapBrowsingSubNet{{ idx }}CIDR'
+    Value: !Ref CiapBrowsingSubNet{{ idx }}CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-CiapBrowsingSubNet{{ idx }}CIDR'
+      Name: !Sub ${AWS::StackName}-CiapBrowsingSubNet{{ idx }}CIDR
   CiapBrowsingSubNet{{ idx }}ID:
     Description: CIAP Browsing subnet 1 ID in Availability Zone {{ idx }}
-    Value: !Ref 'CiapBrowsingSubNet{{ idx }}'
+    Value: !Ref CiapBrowsingSubNet{{ idx }}
     Export:
-      Name: !Sub '${AWS::StackName}-CiapBrowsingSubNet{{ idx }}ID'
+      Name: !Sub ${AWS::StackName}-CiapBrowsingSubNet{{ idx }}ID
   CiapVPNSubNet{{ idx }}CIDR:
     Condition: VPNInstanceCondition
     Description: CIAP VPN subnet 1 CIDR in Availability Zone {{ idx }}
-    Value: !Ref 'CiapVPNSubNet{{ idx }}CIDR'
+    Value: !Ref CiapVPNSubNet{{ idx }}CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-CiapVPNSubNet{{ idx }}CIDR'
+      Name: !Sub ${AWS::StackName}-CiapVPNSubNet{{ idx }}CIDR
   CiapVPNSubNet{{ idx }}ID:
     Condition: VPNInstanceCondition
     Description: CIAP VPN subnet 1 ID in Availability Zone {{ idx }}
-    Value: !Ref 'CiapVPNSubNet{{ idx }}'
+    Value: !Ref CiapVPNSubNet{{ idx }}
     Export:
-      Name: !Sub '${AWS::StackName}-CiapVPNSubNet{{ idx }}ID'
+      Name: !Sub ${AWS::StackName}-CiapVPNSubNet{{ idx }}ID
+{% endfor %}
+  # CiapBrowsing
+  VPCCiapBrowsingID:
+    Value: !Ref VPCCiapBrowsing
+    Description: VPC CIAPBrowsing ID
+    Export:
+      Name: !Sub ${AWS::StackName}-VPCCiapBrowsingID
+  CiapBrowsingPublicRouteTableID:
+    Value: !Ref CiapBrowsingPublicRouteTable
+    Description: CIAP Browsing Public route table
+    Export:
+      Name: !Sub ${AWS::StackName}-CiapBrowsingPublicRouteTable
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+  CiapBrowsingPrivateRouteTable{{ idx }}ID:
+    Value: !Ref CiapBrowsingPrivateRouteTable{{ idx }}
+    Description: CIAP Browsing Private route table {{ idx }}
+    Export:
+      Name: !Sub ${AWS::StackName}-CiapBrowsingPrivateRouteTable{{ idx }}
+  CiapBrowsingPublicSubnet{{ idx }}ID:
+    Description: CIAP Browsing Public subnet ID in Availability Zone {{ idx }}
+    Value: !Ref CiapBrowsingPublicSubnet{{ idx }}
+    Export:
+      Name: !Sub ${AWS::StackName}-CiapBrowsingPublicSubnet{{ idx }}ID
+  CiapBrowsingPrivateSubnet{{ idx }}ID:
+    Description: CIAP Browsing Private subnet ID in Availability Zone {{ idx }}
+    Value: !Ref CiapBrowsingPrivateSubnet{{ idx }}
+    Export:
+      Name: !Sub ${AWS::StackName}-CiapBrowsingPrivateSubnet{{ idx }}ID
 {% endfor %}
   VPCAdminCIDR:
-    Value: !Ref 'VPCAdminCIDR'
+    Value: !Ref VPCAdminCIDR
     Description: Admin VPC CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-VPCAdminCIDR'
+      Name: !Sub ${AWS::StackName}-VPCAdminCIDR
   VPCAdminID:
-    Value: !Ref 'VPCAdmin'
+    Value: !Ref VPCAdmin
     Description: Admin VPC ID
     Export:
-      Name: !Sub '${AWS::StackName}-VPCAdminID'
+      Name: !Sub ${AWS::StackName}-VPCAdminID
   AdminRouteTableID:
-    Value: !Ref 'AdminRouteTable'
+    Value: !Ref AdminRouteTable
     Description: Admin route table
     Export:
-      Name: !Sub '${AWS::StackName}-AdminRouteTable'
+      Name: !Sub ${AWS::StackName}-AdminRouteTable
 {% for idx in range(1, admin_nb_subnets|int + 1) %}
   AdminSubNet{{ idx }}CIDR:
     Description: Admin subnet 1 CIDR in Availability Zone {{ idx }}
-    Value: !Ref 'AdminSubNet{{ idx }}CIDR'
+    Value: !Ref AdminSubNet{{ idx }}CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-AdminSubNet{{ idx }}CIDR'
+      Name: !Sub ${AWS::StackName}-AdminSubNet{{ idx }}CIDR
   AdminSubNet{{ idx }}ID:
     Description: Admin subnet 1 ID in Availability Zone {{ idx }}
-    Value: !Ref 'AdminSubNet{{ idx }}'
+    Value: !Ref AdminSubNet{{ idx }}
     Export:
-      Name: !Sub '${AWS::StackName}-AdminSubNet{{ idx }}ID'
+      Name: !Sub ${AWS::StackName}-AdminSubNet{{ idx }}ID
 {% endfor %}
   VPCTechCIDR:
-    Value: !Ref 'VPCTechCIDR'
+    Value: !Ref VPCTechCIDR
     Description: Tech VPC CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-VPCTechCIDR'
+      Name: !Sub ${AWS::StackName}-VPCTechCIDR
   VPCTechID:
-    Value: !Ref 'VPCTech'
+    Value: !Ref VPCTech
     Description: Tech VPC ID
     Export:
-      Name: !Sub '${AWS::StackName}-VPCTechID'
+      Name: !Sub ${AWS::StackName}-VPCTechID
   TechRouteTableID:
-    Value: !Ref 'TechRouteTable'
+    Value: !Ref TechRouteTable
     Description: Tech route table
     Export:
-      Name: !Sub '${AWS::StackName}-TechRouteTable'
+      Name: !Sub ${AWS::StackName}-TechRouteTable
 {% for idx in range(1, tech_nb_subnets|int + 1) %}
   TechSubNet{{ idx }}CIDR:
     Description: Tech subnet 1 CIDR in Availability Zone {{ idx }}
-    Value: !Ref 'TechSubNet{{ idx }}CIDR'
+    Value: !Ref TechSubNet{{ idx }}CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-TechSubNet{{ idx }}CIDR'
+      Name: !Sub ${AWS::StackName}-TechSubNet{{ idx }}CIDR
   TechSubNet{{ idx }}ID:
     Description: Tech subnet 1 ID in Availability Zone {{ idx }}
-    Value: !Ref 'TechSubNet{{ idx }}'
+    Value: !Ref TechSubNet{{ idx }}
     Export:
-      Name: !Sub '${AWS::StackName}-TechSubNet{{ idx }}ID'
+      Name: !Sub ${AWS::StackName}-TechSubNet{{ idx }}ID
 {% endfor %}
   VPCProjectCIDR:
-    Value: !Ref 'VPCProjectCIDR'
+    Value: !Ref VPCProjectCIDR
     Description: Project VPC CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-VPCProjectCIDR'
+      Name: !Sub ${AWS::StackName}-VPCProjectCIDR
   VPCProjectID:
-    Value: !Ref 'VPCProject'
+    Value: !Ref VPCProject
     Description: Project VPC ID
     Export:
-      Name: !Sub '${AWS::StackName}-VPCProjectID'
+      Name: !Sub ${AWS::StackName}-VPCProjectID
   ProjectRouteTableID:
-    Value: !Ref 'ProjectRouteTable'
+    Value: !Ref ProjectRouteTable
     Description: Project route table
     Export:
-      Name: !Sub '${AWS::StackName}-ProjectRouteTable'
+      Name: !Sub ${AWS::StackName}-ProjectRouteTable
 {% for idx in range(1, project_nb_subnets|int + 1) %}
   ProjectSubNet{{ idx }}CIDR:
     Description: Project default ID in Availability Zone {{ idx }}
-    Value: !Ref 'ProjectSubNet{{ idx }}CIDR'
+    Value: !Ref ProjectSubNet{{ idx }}CIDR
     Export:
-      Name: !Sub '${AWS::StackName}-ProjectSubNet{{ idx }}CIDR'
+      Name: !Sub ${AWS::StackName}-ProjectSubNet{{ idx }}CIDR
   ProjectSubNet{{ idx }}ID:
     Description: Project default SubNet ID in Availability Zone {{ idx }}
-    Value: !Ref 'ProjectSubNet{{ idx }}'
+    Value: !Ref ProjectSubNet{{ idx }}
     Export:
-      Name: !Sub '${AWS::StackName}-ProjectSubNet{{ idx }}ID'
+      Name: !Sub ${AWS::StackName}-ProjectSubNet{{ idx }}ID
 {% endfor %}
   VPCCiapS3VPCEndpointID:
-    Value: !Ref 'VPCCiapS3VPCEndpoint'
+    Value: !Ref VPCCiapS3VPCEndpoint
     Description: CIAP VPC Endpoint for S3
     Export:
-      Name: !Sub '${AWS::StackName}-VPCCiapS3VPCEndpointID'
+      Name: !Sub ${AWS::StackName}-VPCCiapS3VPCEndpointID
   VPCAdminS3VPCEndpointID:
-    Value: !Ref 'VPCAdminS3VPCEndpoint'
+    Value: !Ref VPCAdminS3VPCEndpoint
     Description: Admin VPC Endpoint for S3
     Export:
-      Name: !Sub '${AWS::StackName}-VPCAdminS3VPCEndpointID'
+      Name: !Sub ${AWS::StackName}-VPCAdminS3VPCEndpointID
   VPCTechS3VPCEndpointID:
-    Value: !Ref 'VPCTechS3VPCEndpoint'
+    Value: !Ref VPCTechS3VPCEndpoint
     Description: Tech VPC Endpoint for S3
     Export:
-      Name: !Sub '${AWS::StackName}-VPCTechS3VPCEndpointID'
+      Name: !Sub ${AWS::StackName}-VPCTechS3VPCEndpointID
   VPCProjectS3VPCEndpointID:
-    Value: !Ref 'VPCProjectS3VPCEndpoint'
+    Value: !Ref VPCProjectS3VPCEndpoint
     Description: Project VPC Endpoint for S3
     Export:
-      Name: !Sub '${AWS::StackName}-VPCProjectS3VPCEndpointID'
+      Name: !Sub ${AWS::StackName}-VPCProjectS3VPCEndpointID
   DNSPrivateZoneID:
-    Value: !Ref 'DNSPrivateZone'
+    Value: !Ref DNSPrivateZone
     Description: Private DNS Zone ID
     Export:
-      Name: !Sub '${AWS::StackName}-DNSPrivateZoneID'
+      Name: !Sub ${AWS::StackName}-DNSPrivateZoneID

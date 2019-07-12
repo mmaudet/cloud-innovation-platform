@@ -1058,37 +1058,205 @@ Resources:
 
   ### VPC Tech
 
-  ### VPC Project
+  ### VPC CIAPBrowsing
+
+  ### BEGIN NAT2 instance / Squid proxy
+  NAT2AutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref NAT2AutoScalingLaunchConfiguration
+      LoadBalancerNames:
+      - !Ref NAT2ElasticLoadBalancer
+      DesiredCapacity: 1
+      MinSize: 1
+      MaxSize: 10
+      VPCZoneIdentifier:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - Fn::ImportValue:
+          !Sub {{ stack_name }}-net-CiapBrowsingPublicSubnet{{ idx }}ID
+{% endfor %}
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      Tags:
+      - PropagateAtLaunch: true
+        Key: "Name"
+        Value: "NAT Instance"
+      - PropagateAtLaunch: true
+        Key: "Function"
+        Value: "NAT"
+
+  NAT2AutoScalingLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      IamInstanceProfile: !Ref NATEC2InstanceProfile
+      AssociatePublicIpAddress: true
+      InstanceType: !Ref NATInstanceType
+      KeyName: !Ref KeyPairName
+      SecurityGroups:
+      - Fn::ImportValue:
+          !Sub {{ stack_name }}-secgrp-NAT2InstanceSecurityGroupID
+      ImageId: !FindInMap [AWSAMIRegionMap, !Ref 'AWS::Region', 'AWSNATHVM']
+      InstanceMonitoring: false
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          echo "MY-CLOUD-INIT-SCRIPT: Start"
+          export NETFUNC=nat
+
+          # Make sure we have internet access
+          CMD='curl -sL -w "%{http_code}" "https://s3.eu-west-1.amazonaws.com/" -o /dev/null --retry 5 --max-time 3'
+          while [ "$(eval $CMD)" != "200" ]; do
+            # No proxy defined here as NAT instances ARE the proxies...
+            #echo "MY-CLOUD-INIT-SCRIPT: NAT instance(s) not ready, sleeping 5 seconds"
+            echo "MY-CLOUD-INIT-SCRIPT: Unable to access test endpoint, sleeping 5 seconds"
+            sleep 5
+          done
+
+          cd /root
+
+          # Common bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching common bootstrap script"
+          aws s3 cp s3://${S3Location}/bootstrap/common/bootstrap.sh ./
+          chmod +x ./bootstrap.sh
+          echo "MY-CLOUD-INIT-SCRIPT: Launching common bootstrap script"
+          ./bootstrap.sh ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location} 2>&1 | tee /var/log/oil-bootstrap
+
+          # Function-specific bootstrap
+          echo "MY-CLOUD-INIT-SCRIPT: Fetching '$NETFUNC-specific' bootstrap script & launching it"
+          NFSCRIPT="bootstrap-${!NETFUNC}.sh"
+          aws s3 cp s3://${S3Location}/bootstrap/$NETFUNC/$NFSCRIPT ./
+          chmod +x ./$NFSCRIPT
+          ./$NFSCRIPT zip ${SquidPort} ${AWS::StackName} ${NATCloudWatchLogsGroup} ${S3Location } 2>&1 | tee /var/log/oil-bootstrap-${!NETFUNC}
+          echo "MY-CLOUD-INIT-SCRIPT: Done!"
+
+  NAT2ElasticLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      SecurityGroups:
+      - Fn::ImportValue:
+          !Sub {{ stack_name }}-secgrp-NAT2ELBSecurityGroupID
+      Subnets:
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+      - Fn::ImportValue:
+          !Sub {{ stack_name }}-net-CiapBrowsingPublicSubnet{{ idx }}ID
+{% endfor %}
+      Listeners:
+      - LoadBalancerPort: !Ref SquidPort
+        InstancePort: !Ref SquidPort
+        Protocol: TCP
+      - LoadBalancerPort: !Ref SquidPortInt80
+        InstancePort: !Ref SquidPortInt80
+        Protocol: TCP
+      - LoadBalancerPort: !Ref SquidPortInt443
+        InstancePort: !Ref SquidPortInt443
+        Protocol: TCP
+      - LoadBalancerPort: 22
+        InstancePort: 22
+        Protocol: TCP
+      ConnectionDrainingPolicy:
+        Enabled: true
+        Timeout: 60
+      Scheme: internal
+      HealthCheck:
+        HealthyThreshold: 6
+        Interval: 10
+        Target: !Join [':', [TCP, !Ref 'SquidPort']]
+        Timeout: 5
+        UnhealthyThreshold: 4
+      CrossZone: true
+      Policies:
+      #TODO: check if change needed for transparent proxy
+      - !If [SupportProxyProtocol, {PolicyName: EnableProxyProtocol, PolicyType: ProxyProtocolPolicyType,
+          Attributes: [{Name: ProxyProtocol, Value: 'true'}], InstancePorts: [!Ref 'SquidPort']},
+        !Ref 'AWS::NoValue']
+      AccessLoggingPolicy:
+        S3BucketName:
+          Ref: S3LogsLocation
+        S3BucketPrefix: ''
+        Enabled: true
+        EmitInterval: 5
+      Tags:
+      - Key: Name
+        Value: !Join ['-', [!Ref 'AWS::StackName', 'CIAP-NATELB']]
+
+  NAT2ScaleOutPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'NAT2AutoScalingGroup'
+      Cooldown: 300
+      ScalingAdjustment: 1
+
+  NAT2ScaleInPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'NAT2AutoScalingGroup'
+      Cooldown: 300
+      ScalingAdjustment: -1
+
+  NAT2AlarmScaleOutPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale out if average Squid traffic > 5000 KB/s for 5 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5000
+      Dimensions:
+      - Name: StackName
+        Value: !Ref AWS::StackName
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+      - !Ref NAT2ScaleOutPolicy
+
+  NAT2AlarmScaleInPolicy:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale in if average Squid traffic < 2000 KB/s for 15 minutes
+      MetricName: TotalKbytesPerSecond
+      Namespace: CIAP
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 2000
+      Dimensions:
+      - Name: StackName
+        Value: !Ref AWS::StackName
+      ComparisonOperator: LessThanThreshold
+      AlarmActions:
+      - !Ref NAT2ScaleInPolicy
+  ### END NAT2 instance / Squid proxy
+
 
   ### BEGIN Transparent proxy
   # Using some NAT* variables since we reached the maximum number of
   # CloudFormation parameters (60 as of writing)
-  TPAutoScalingGroup:
+
+{% for idx in range(1, ciap_nb_subnets|int + 1) %}
+  TPAutoScalingGroup{{ idx }}:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      LaunchConfigurationName: !Ref 'TPAutoScalingLaunchConfiguration'
-      #TargetGroupARNs:
-      #- !Ref TPELBTargetGroup80
-      #- !Ref TPELBTargetGroup443
-      #- !Ref TPELBTargetGroup3128
-      DesiredCapacity: '1'
-      MinSize: '1'
-      MaxSize: '10'
+      LaunchConfigurationName: !Ref TPAutoScalingLaunchConfiguration{{ idx }}
+      DesiredCapacity: 1
+      MinSize: 1
+      MaxSize: 10
       VPCZoneIdentifier:
-{% for idx in range(1, project_ocp_nb_subnets|int + 1) %}
-      - !Ref 'ProjectSubNet{{ idx }}ID'
-{% endfor %}
+      - Fn::ImportValue:
+          !Sub {{ stack_name }}-net-CiapBrowsingPublicSubnet{{ idx }}ID
       HealthCheckType: ELB
-      HealthCheckGracePeriod: '300'
+      HealthCheckGracePeriod: 300
       Tags:
       - PropagateAtLaunch: true
         Key: "Name"
-        Value: "{{ stack_name }}-project-tpinstance"
+        Value: "{{ stack_name }}-CIAPBrowsing-tpinstance{{ idx }}"
       - PropagateAtLaunch: true
         Key: "Function"
         Value: "TP"
 
-  TPAutoScalingLaunchConfiguration:
+  TPAutoScalingLaunchConfiguration{{ idx }}:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
       IamInstanceProfile:
@@ -1144,59 +1312,58 @@ Resources:
             echo "MY-CLOUD-INIT-SCRIPT: Done!"
           - TPCloudWatchLogsGroup:
               Fn::ImportValue:
-                !Sub "{{ stack_name }}-rlp-TPCloudWatchLogsGroup"
+                !Sub {{ stack_name }}-rlp-TPCloudWatchLogsGroup
 
-  TPScaleOutPolicy:
+  TPScaleOutPolicy{{ idx }}:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref 'TPAutoScalingGroup'
-      Cooldown: '300'
-      ScalingAdjustment: '1'
+      AutoScalingGroupName: !Ref TPAutoScalingGroup{{ idx }}
+      Cooldown: 300
+      ScalingAdjustment: 1
 
-  TPScaleInPolicy:
+  TPScaleInPolicy{{ idx }}:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref 'TPAutoScalingGroup'
-      Cooldown: '300'
-      ScalingAdjustment: '-1'
+      AutoScalingGroupName: !Ref TPAutoScalingGroup{{ idx }}
+      Cooldown: 300
+      ScalingAdjustment: -1
 
-  TPAlarmScaleOutPolicy:
+  TPAlarmScaleOutPolicy{{ idx }}:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: Scale out if average Squid traffic > 5000 KB/s for 5 minutes
       MetricName: TotalKbytesPerSecond
       Namespace: CIAP
       Statistic: Average
-      Period: '300'
-      EvaluationPeriods: '1'
-      Threshold: '5000'
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5000
       Dimensions:
       - Name: StackName
-        Value: !Ref 'AWS::StackName'
+        Value: !Ref AWS::StackName
       ComparisonOperator: GreaterThanThreshold
       AlarmActions:
-      - !Ref 'TPScaleOutPolicy'
+      - !Ref TPScaleOutPolicy{{ idx }}
 
-  TPAlarmScaleInPolicy:
+  TPAlarmScaleInPolicy{{ idx }}:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: Scale in if average Squid traffic < 2000 KB/s for 15 minutes
       MetricName: TotalKbytesPerSecond
       Namespace: CIAP
       Statistic: Average
-      Period: '300'
-      EvaluationPeriods: '3'
-      Threshold: '2000'
+      Period: 300
+      EvaluationPeriods: 3
+      Threshold: 2000
       Dimensions:
       - Name: StackName
-        Value: !Ref 'AWS::StackName'
+        Value: !Ref AWS::StackName
       ComparisonOperator: LessThanThreshold
       AlarmActions:
-      - !Ref 'TPScaleInPolicy'
-
-
+      - !Ref TPScaleInPolicy{{ idx }}
+{% endfor %}
   ### END Transparent proxy
 
 
