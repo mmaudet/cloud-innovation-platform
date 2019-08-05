@@ -128,6 +128,41 @@ $ ansible-playbook -vvv -i inventory/aws/hosts \
 
 To be documented
 
+# Deploying the platform in AWS China regions
+
+## Route53
+
+As of writing, this service is still in beta so you must be enrolled first.
+
+You also need to patch botocore since the route53 service is not defined yet in the AWS China partition.
+
+```shell
+# diff botocore/data/endpoints.json botocore/data/endpoints.json.orig
+--- botocore/data/endpoints.json
++++ botocore/data/endpoints.json.orig
+@@ -3357,19 +3357,6 @@
+           "cn-northwest-1" : { }
+         }
+       },
+-      "route53" : {
+-        "endpoints" : {
+-          "aws-cn-global" : {
+-            "credentialScope" : {
+-              "region" : "cn-northwest-1"
+-            },
+-            "hostname" : "api.route53.cn",
+-            "protocols" : [ "http", "https" ]
+-          }
+-        },
+-        "isRegionalized" : false,
+-        "partitionEndpoint" : "aws-cn-global"
+-      },
+       "cloudfront" : {
+         "endpoints" : {
+           "aws-cn-global" : {
+
+```
+
 # Troubleshooting
 
 To be documented

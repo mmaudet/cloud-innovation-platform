@@ -7,8 +7,8 @@
        "Principal": "*",
        "Action": "s3:*",
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -25,8 +25,8 @@
        "Principal": "*",
        "Action": "s3:*",
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -43,10 +43,10 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/waf/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/waf/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -63,10 +63,10 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/nat/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/nat/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -83,10 +83,10 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/tp/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/tp/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -103,10 +103,10 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/vpn/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/common/*",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/vpn/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -123,9 +123,9 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/bootstrap/*"
                    ],
        "Condition": {
          "StringLike": {

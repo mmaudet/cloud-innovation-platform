@@ -255,8 +255,8 @@ Resources:
             - s3:Get*
           Effect: Allow
           Resource:
-            - !Join ['', ['arn:aws:s3:::repo.eu-west-1.amazonaws.com']]
-            - !Join ['', ['arn:aws:s3:::repo.eu-west-1.amazonaws.com/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::repo.eu-west-1.amazonaws.com']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::repo.eu-west-1.amazonaws.com/*']]
         - Sid: Allow access only to current stack buckets
           Principal: '*'
           Action:
@@ -266,12 +266,12 @@ Resources:
             - s3:Put*
           Effect: Allow
           Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/*']]
         - Sid: Allow listing buckets (required by ansible s3_bucket module)
           Principal: '*'
           Action:
@@ -552,8 +552,8 @@ Resources:
             - s3:Get*
           Effect: Allow
           Resource:
-            - !Join ['', ['arn:aws:s3:::repo.eu-west-1.amazonaws.com']]
-            - !Join ['', ['arn:aws:s3:::repo.eu-west-1.amazonaws.com/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::repo.eu-west-1.amazonaws.com']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::repo.eu-west-1.amazonaws.com/*']]
         - Sid: Allow access only to current stack buckets
           Principal: '*'
           Action:
@@ -563,12 +563,12 @@ Resources:
             - s3:Put*
           Effect: Allow
           Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/*']]
         - Sid: Allow listing buckets (required by ansible s3_bucket module)
           Principal: '*'
           Action:
@@ -656,12 +656,12 @@ Resources:
             - s3:Put*
           Effect: Allow
           Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/*']]
       RouteTableIds:
       - !Ref AdminRouteTable
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
@@ -742,12 +742,12 @@ Resources:
             - s3:Put*
           Effect: Allow
           Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/*']]
       RouteTableIds:
       - !Ref TechRouteTable
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
@@ -831,12 +831,12 @@ Resources:
             - s3:Put*
           Effect: Allow
           Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/*']]
       RouteTableIds:
       - !Ref ProjectRouteTable
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]

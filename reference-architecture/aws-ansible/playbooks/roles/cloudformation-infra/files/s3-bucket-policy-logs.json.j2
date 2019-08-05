@@ -7,8 +7,8 @@
        "Principal": "*",
        "Action": "s3:*",
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -25,8 +25,8 @@
        "Principal": "*",
        "Action": "s3:*",
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -43,8 +43,8 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/waf/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/waf/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -61,8 +61,8 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/nat/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/nat/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -79,8 +79,8 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/vpn/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/vpn/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -97,8 +97,8 @@
                    "s3:List*"
                  ],
        "Resource": [
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
-                     "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/*"
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
+                     "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/bootstrap/*"
                    ],
        "Condition": {
          "StringLike": {
@@ -110,10 +110,10 @@
        "Sid": "Allow-access-from-AWS-ELB",
        "Effect": "Allow",
        "Principal": {
-          "AWS": "arn:aws:iam::156460612806:root"
+          "AWS": "arn:{{aws_partition}}:iam::156460612806:root"
        },
        "Action": "s3:PutObject*",
-       "Resource": "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/AWSLogs/{{ root_account['account_id'] }}/*"
+       "Resource": "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/AWSLogs/{{ root_account['account_id'] }}/*"
      },
      {
       "Sid": "AWSLogDeliveryWrite",
@@ -122,7 +122,7 @@
         "Service": [ "delivery.logs.amazonaws.com" ]
       },
       "Action": [ "s3:PutObject" ],
-      "Resource": "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/AWSLogs/{{ root_account['account_id'] }}/*",
+      "Resource": "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/AWSLogs/{{ root_account['account_id'] }}/*",
       "Condition": {"StringEquals": {"s3:x-amz-acl": "bucket-owner-full-control"}}
     },
     {
@@ -132,7 +132,7 @@
         "Service": [ "delivery.logs.amazonaws.com" ]
       },
       "Action": [ "s3:GetBucketAcl" ],
-      "Resource": "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}"
+      "Resource": "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}"
     }
    ]
 }

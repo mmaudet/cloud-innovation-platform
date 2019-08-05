@@ -17,10 +17,10 @@
           "s3:*"
         ],
       "Resource": [
-                    "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
-                    "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*",
-                    "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
-                    "arn:aws:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/*"
+                    "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}",
+                    "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-data' }}/*",
+                    "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}",
+                    "arn:{{aws_partition}}:s3:::{{ s3_bucket_prefix | lower + '-logs' }}/*"
                   ],
     },
     {

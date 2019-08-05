@@ -30,12 +30,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AdministratorAccess"
+        - "arn:{{aws_partition}}:iam::aws:policy/AdministratorAccess"
       RoleName: "GRP-GTS-COE-ADMIN"
   #Role OS Administrator
   GRPGTSOSADM:
@@ -48,12 +48,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - "arn:{{aws_partition}}:iam::aws:policy/ReadOnlyAccess"
         - !Ref COEOSADMIN
       RoleName: "GRP-GTS-COE-OS-ADMIN"
   #Role Inventory
@@ -67,12 +67,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - "arn:{{aws_partition}}:iam::aws:policy/ReadOnlyAccess"
       Policies:
         -
           PolicyName: "ATM-GTS-COE-INVENTORY"
@@ -99,12 +99,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - "arn:{{aws_partition}}:iam::aws:policy/ReadOnlyAccess"
         - !Ref COEDBADMIN
       RoleName: "GRP-GTS-COE-DB-ADMIN"
   #Role Net Administrator
@@ -118,12 +118,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/ReadOnlyAccess"
+        - "arn:{{aws_partition}}:iam::aws:policy/ReadOnlyAccess"
         - !Ref COENETADMIN
       RoleName: "GRP-GTS-COE-NET-ADMIN"
   #Role Net Readers
@@ -137,12 +137,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AmazonVPCReadOnlyAccess"
+        - "arn:{{aws_partition}}:iam::aws:policy/AmazonVPCReadOnlyAccess"
       RoleName: "GRP-GTS-COE-NET-READ"
   #Role Security Administrator
   GRPGTSCOESECADM:
@@ -155,12 +155,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/AdministratorAccess"
+        - "arn:{{aws_partition}}:iam::aws:policy/AdministratorAccess"
       RoleName: "GRP-GTS-COE-SEC-ADMIN"
   #Role Security Auditors
   GRPGTSCOESECAUDIT:
@@ -173,12 +173,12 @@ Resources:
             Effect: "Allow"
             Principal:
               AWS:
-                - !Join [":",  [ "arn:aws:iam:", !Ref pIAMAccount, "root"]]
+                - !Join [":",  [ "arn:{{aws_partition}}:iam:", !Ref pIAMAccount, "root"]]
             Action:
               - "sts:AssumeRole"
       Path: "/"
       ManagedPolicyArns:
-        - "arn:aws:iam::aws:policy/SecurityAudit"
+        - "arn:{{aws_partition}}:iam::aws:policy/SecurityAudit"
       RoleName: "GRP-GTS-COE-SEC-AUDIT"
   #COEOSADMIN Policy
   COEOSADMIN:
@@ -202,7 +202,7 @@ Resources:
                 "Sid": "COEOSAdminAllowInstanceRoleOsInfra",
                 "Effect": "Allow",
                 "Action": "iam:PassRole",
-                "Resource": !Join [ ":", [ "arn:aws:iam:", !Ref "AWS::AccountId" , "role/*"]]
+                "Resource": !Join [ ":", [ "arn:{{aws_partition}}:iam:", !Ref "AWS::AccountId" , "role/*"]]
             },
             {
                 "Effect": "Allow",
@@ -223,7 +223,7 @@ Resources:
                     "kms:DescribeKey*"
                 ],
                 "Resource": [
-                    "arn:aws:kms:eu-west-1:366994483597:key/5b2fa8fc-7626-4fa1-a677-7a660da9bb8c"
+                    "arn:{{aws_partition}}:kms:eu-west-1:366994483597:key/5b2fa8fc-7626-4fa1-a677-7a660da9bb8c"
                 ]
             },
             {
@@ -636,7 +636,7 @@ Resources:
             - logs:CreateLogStream
             - logs:DescribeLogStreams
             - logs:CreateLogGroup
-            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+            Resource: !Join ['', ['arn:{{aws_partition}}:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
                 ':log-group:', !Ref 'WAFCloudWatchLogsGroup', ':log-stream:*']]
       - PolicyName: S3-Buckets-Access
         PolicyDocument:
@@ -647,10 +647,10 @@ Resources:
             - s3:Get*
             - s3:List*
             Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/waf/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/waf/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/waf/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/waf/*']]
 
   WAFCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
@@ -700,7 +700,7 @@ Resources:
             - logs:CreateLogStream
             - logs:DescribeLogStreams
             - logs:CreateLogGroup
-            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+            Resource: !Join ['', ['arn:{{aws_partition}}:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
                 ':log-group:', !Ref 'NATCloudWatchLogsGroup', ':log-stream:*']]
       - PolicyName: S3-Buckets-Access
         PolicyDocument:
@@ -711,10 +711,10 @@ Resources:
             - s3:Get*
             - s3:List*
             Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/bootstrap/nat/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/nat/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/bootstrap/nat/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/nat/*']]
 
   NATCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
@@ -764,7 +764,7 @@ Resources:
             - logs:CreateLogStream
             - logs:DescribeLogStreams
             - logs:CreateLogGroup
-            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+            Resource: !Join ['', ['arn:{{aws_partition}}:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
                 ':log-group:', !Ref 'TPCloudWatchLogsGroup', ':log-stream:*']]
       - PolicyName: S3-Buckets-Access
         PolicyDocument:
@@ -775,10 +775,10 @@ Resources:
             - s3:Get*
             - s3:List*
             Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/bootstrap/tp/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/tp/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/bootstrap/tp/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/tp/*']]
       - PolicyName: EC2-ListAndModifyInstances
         PolicyDocument:
           Version: '2012-10-17'
@@ -799,10 +799,10 @@ Resources:
             - ec2:CreateRoute
             - ec2:ReplaceRoute
             Resource:
-            - "arn:aws:ec2:{{region}}:{{root_account['account_id']}}:route-table/*"
+            - "arn:{{aws_partition}}:ec2:{{region}}:{{root_account['account_id']}}:route-table/*"
             Condition:
               StringEquals:
-                'ec2:vpc' : "arn:aws:ec2:{{region}}:{{root_account['account_id']}}:vpc/{{ cfnet['stack_outputs']['VPCCiapBrowsingID'] }}"
+                'ec2:vpc' : "arn:{{aws_partition}}:ec2:{{region}}:{{root_account['account_id']}}:vpc/{{ cfnet['stack_outputs']['VPCCiapBrowsingID'] }}"
 
   TPCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
@@ -852,7 +852,7 @@ Resources:
             - logs:CreateLogStream
             - logs:DescribeLogStreams
             - logs:CreateLogGroup
-            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+            Resource: !Join ['', ['arn:{{aws_partition}}:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
                 ':log-group:', !Ref 'VPNCloudWatchLogsGroup', ':log-stream:*']]
       - PolicyName: S3-Buckets-Access
         PolicyDocument:
@@ -863,10 +863,10 @@ Resources:
             - s3:Get*
             - s3:List*
             Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/vpn/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/vpn/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/vpn/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/vpn/*']]
 
   VPNCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup
@@ -916,7 +916,7 @@ Resources:
             - logs:CreateLogStream
             - logs:DescribeLogStreams
             - logs:CreateLogGroup
-            Resource: !Join ['', ['arn:aws:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
+            Resource: !Join ['', ['arn:{{aws_partition}}:logs:', !Ref 'AWS::Region', ':', !Ref 'AWS::AccountId',
                 ':log-group:', !Ref 'BastionCloudWatchLogsGroup', ':log-stream:*']]
       - PolicyName: S3-Buckets-Access
         PolicyDocument:
@@ -927,10 +927,10 @@ Resources:
             - s3:Get*
             - s3:List*
             Resource:
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/*']]
 
   BastionCloudWatchLogsGroup:
     Type: AWS::Logs::LogGroup

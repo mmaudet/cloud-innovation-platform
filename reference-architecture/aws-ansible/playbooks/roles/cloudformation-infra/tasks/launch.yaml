@@ -3,6 +3,7 @@
   iam:
     iam_type: role
     name: "{{ stack_name }}-installer-role"
+    #description: Role used to by the OIP automation processes to install the platform
     state: present
     trust_policy:
       Version: '2012-10-17'
@@ -10,11 +11,11 @@
       - Effect: Allow
         Action: sts:AssumeRole
         Principal:
-          AWS:
-            - arn:aws:iam::{{ root_account['account_id'] }}:user/{{ root_account['iam_user'] }}
-            - arn:aws:iam::{{ root_account['account_id'] }}:user/factotum-bootstrap
+        #  AWS:
+        #    - arn:{{aws_partition}}:iam::{{ root_account['account_id'] }}:user/{{ root_account['iam_user'] }}
+        #    - arn:{{aws_partition}}:iam::{{ root_account['account_id'] }}:user/factotum-bootstrap
           Service:
-            - ec2.amazonaws.com
+            - ec2.amazonaws.com.cn
             - cloudformation.amazonaws.com
   register: iam
 
