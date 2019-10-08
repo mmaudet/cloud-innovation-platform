@@ -609,13 +609,29 @@ Resources:
             - 's3:Get*'
             - 's3:Put*'
           Effect: Allow
-          Resource: 
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-*/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-data/*']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs']]
-            - !Join ['', ['arn:aws:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+          Resource:
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-*/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/*']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-logs/*']]
+        - Sid: Allow Nexus to manage its objects
+          Principal: '*'
+          Action:
+            - s3:PutObject
+            - s3:GetObject
+            - s3:DeleteObject
+            - s3:ListBucket
+            - s3:GetLifecycleConfiguration
+            - s3:PutLifecycleConfiguration
+            - s3:PutObjectTagging
+            - s3:GetObjectTagging
+            - s3:DeleteObjectTagging
+          Effect: Allow
+          Resource:
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/nexus']]
+            - !Join ['', ['arn:{{aws_partition}}:s3:::', !Ref S3BucketPrefix, '-data/nexus/*']]
       RouteTableIds:
       - !Ref 'ProjectRouteTable'
       ServiceName: !Join ['', [com.amazonaws., !Ref 'AWS::Region', .s3]]
