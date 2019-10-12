@@ -56,6 +56,9 @@ server {
     ssl_session_cache   shared:SSL:40m;
     ssl_session_timeout 4h;
 
+    # Enable session tickets
+    ssl_session_tickets on;
+
     client_max_body_size 2048M;
 
     location /basic_status {
