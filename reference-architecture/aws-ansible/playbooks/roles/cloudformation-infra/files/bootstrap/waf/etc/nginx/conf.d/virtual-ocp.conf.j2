@@ -49,6 +49,9 @@ server {
 
     # ssl_dhparam /etc/nginx/certs/dhparams.pem;
 
+    # Enable HSTS
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
     client_max_body_size 2048M;
 
     location /basic_status {
