@@ -19,6 +19,8 @@ import sys
               show_default=True)
 @click.option('--stack-name', default='OIL', help='Cloudformation stack name. Must be unique',
               show_default=True)
+@click.option('--cluster_id', default='ocp', help='Cluster unique identifier. Must be unique',
+              show_default=True)
 @click.option('--region', default='eu-west-1', help='EC2 region',
               show_default=True)
 @click.option('--public-dns-domain', help='Route53 Public DNS domain, it will be created if it does not exist, but will not be deleted at teardown',
@@ -120,6 +122,7 @@ def launch_oil_env(task=None,
                    refresh_ansible_cache=None,
                    region=None,
                    stack_name=None,
+                   cluster_id=None,
                    public_dns_domain=None,
                    private_dns_domain=None,
                    ciap_nb_subnets=None,
@@ -170,6 +173,7 @@ def launch_oil_env(task=None,
   if task == 'teardown':
     click.echo('\tregion: %s' % region)
     click.echo('\tstack_name: %s' % stack_name)
+    click.echo('\tcluster_id: %s' % stack_name)
 
     if not no_confirm:
       click.confirm('Continue using these values?', abort=True)
@@ -181,11 +185,13 @@ def launch_oil_env(task=None,
                  region=%s \
                  public_dns_domain=%s \
                  private_dns_domain=%s \
-                 stack_name=%s \' %s' % (task,
+                 stack_name=%s \
+                 cluster_id=%s \' %s' % (task,
                                          region,
                                          public_dns_domain,
                                          private_dns_domain,
                                          stack_name,
+                                         cluster_id,
                                          playbook)
 
     if verbose > 0:
@@ -253,6 +259,7 @@ def launch_oil_env(task=None,
   click.echo('Configured values:')
   click.echo('\tcreate_infra: %s' % create_infra)
   click.echo('\tstack_name: %s' % stack_name)
+  click.echo('\tcluster_id: %s' % cluster_id)
   click.echo('\tregion: %s' % region)
   click.echo('\tpublic_dns_domain: %s' % public_dns_domain)
   click.echo('\tprivate_dns_domain: %s' % private_dns_domain)
@@ -299,7 +306,8 @@ def launch_oil_env(task=None,
 
 
   #playbooks = ['playbooks/infrastructure.yaml', 'playbooks/openshift-install.yaml']
-  playbooks = ['playbooks/account-setup.yaml', 'playbooks/infrastructure.yaml']
+  #playbooks = ['playbooks/account-setup.yaml', 'playbooks/infrastructure.yaml']
+  playbooks = ['playbooks/infrastructure.yaml']
 
   for playbook in playbooks:
 
@@ -323,6 +331,7 @@ def launch_oil_env(task=None,
     task=%s \
     region=%s \
     stack_name=%s \
+    cluster_id=%s \
     public_dns_domain=%s \
     private_dns_domain=%s \
     ciap_nb_subnets=%s \
@@ -364,6 +373,7 @@ def launch_oil_env(task=None,
 														task,
 														region,
 														stack_name,
+														cluster_id,
 														public_dns_domain,
 														private_dns_domain,
 														int(ciap_nb_subnets),
