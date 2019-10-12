@@ -63,22 +63,23 @@ to make sure your design will scale and allow future use case.
 
 The following segmentation would fit most needs.
 
-| VPC     | CIDR          | # IPs  | Subnet   | Comments |
-|---------|--------------:|-------:|----------|----------|
-| CIAP    | 10.0.0.0/20   | 4094   | supernet | 1 subnet per AZ, max 1022 IP/AZ, seems enough |
-| Admin   | 10.0.16.0/20  | 4094   | supernet | 1 subnet per AZ, max 1022 IP/AZ, seems enough |
-| Tech    | 10.0.32.0/20  | 4094   | supernet | 1 subnet per AZ, max 1022 IP/AZ, seems enough |
-| Project | 10.0.128.0/17 | 32766  | supernet | Many subnets for various usage, aPaaS, CaaS, EC2 instances, etc. |
-| Project | 10.0.128.0/24 | 254    | OpenShift Pub 1 | Public Subnet for OpenShift in AZ 1 |
-| Project | 10.0.129.0/24 | 254    | OpenShift Pub 2 | Public Subnet for OpenShift in AZ 2 |
-| Project | 10.0.130.0/24 | 254    | OpenShift Pub 3 | Public Subnet for OpenShift in AZ 3 |
-| Project | 10.0.131.0/24 | 254    | OpenShift Pub 4 | Reserving for Public Subnet for OpenShift in AZ 4 |
-| Project | 10.0.132.0/24 | 254    | OpenShift Priv 1 | Private Subnet for OpenShift in AZ 1 |
-| Project | 10.0.133.0/24 | 254    | OpenShift Priv 2 | Private Subnet for OpenShift in AZ 2 |
-| Project | 10.0.134.0/24 | 254    | OpenShift Priv 3 | Private Subnet for OpenShift in AZ 3 |
-| Project | 10.0.135.0/24 | 254    | OpenShift Priv 4 | Reserving for Private Subnet for OpenShift in AZ 4 |
+| VPC             | CIDR          | # IPs  | Subnet   | Comments |
+|-----------------|--------------:|-------:|----------|----------|
+| CIAP (Hosting)  | 10.0.0.0/20   | 4094   | supernet | 1 subnet per AZ, max 1022 IP/AZ, seems enough |
+| Admin           | 10.0.16.0/20  | 4094   | supernet | 1 subnet per AZ, max 1022 IP/AZ, seems enough |
+| Tech            | 10.0.32.0/20  | 4094   | supernet | 1 subnet per AZ, max 1022 IP/AZ, seems enough |
+| CIAP (Browsing) | 10.0.48.0/20  | 4094   | supernet | 1 subnet per AZ, max 1022 IP/AZ, seems enough |
+| Project         | 10.0.128.0/17 | 32766  | supernet | Many subnets for various usage, aPaaS, CaaS, EC2 instances, etc. |
+| Project         | 10.0.128.0/24 | 254    | OpenShift Pub 1 | Public Subnet for OpenShift in AZ 1 |
+| Project         | 10.0.129.0/24 | 254    | OpenShift Pub 2 | Public Subnet for OpenShift in AZ 2 |
+| Project         | 10.0.130.0/24 | 254    | OpenShift Pub 3 | Public Subnet for OpenShift in AZ 3 |
+| Project         | 10.0.131.0/24 | 254    | OpenShift Pub 4 | Reserving for Public Subnet for OpenShift in AZ 4 |
+| Project         | 10.0.132.0/24 | 254    | OpenShift Priv 1 | Private Subnet for OpenShift in AZ 1 |
+| Project         | 10.0.133.0/24 | 254    | OpenShift Priv 2 | Private Subnet for OpenShift in AZ 2 |
+| Project         | 10.0.134.0/24 | 254    | OpenShift Priv 3 | Private Subnet for OpenShift in AZ 3 |
+| Project         | 10.0.135.0/24 | 254    | OpenShift Priv 4 | Reserving for Private Subnet for OpenShift in AZ 4 |
 
-At time of writing, VPC CIDR on AWS are limited to /16 (65534 IP addresses). 
+At time of writing, VPC CIDR on AWS are limited to /16 (65534 IP addresses).
 
 
 
@@ -111,7 +112,7 @@ $ cp playbooks/vars/main.yaml.sample playbooks/vars/main.yaml
 $ ./cip-on-aws.py -v --task=launch --stack-name=cip-dev \
                      --public-dns-domain=cip-dev.domain.com \
                      --private-dns-domain=cip-dev.domain.priv \
-                     --keypair=aws-key-pair-name 
+                     --keypair=aws-key-pair-name
 ```
 
 5. Trigger the OpenShift admin, master, infra and worker nodes creation
